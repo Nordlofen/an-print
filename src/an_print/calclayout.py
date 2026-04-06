@@ -88,6 +88,20 @@ class CalcLayout:
         """
         return "l" * antal_kolumner
 
+    def _vansterjusterat_array(self, colspec):
+        """
+        Bygger startsträngen för ett ``array`` utan synlig vänstermarginal.
+
+        Parametrar:
+            colspec : str
+                Kolumnspec för arraymiljön.
+
+        Returvärde:
+            str
+                Startsträng för arraymiljön.
+        """
+        return r"\hspace{-0.6em}\begin{array}{" + colspec + "}"
+
     def _hamta_block(self, calcblock_objekt, blocknamn):
         """
         Hämtar ett redan genererat block från ett CalcBlock-objekt.
@@ -184,13 +198,13 @@ class CalcLayout:
 
         colspec = self._array_colspec(cols)
         lines = [r"$"]
-        lines.append(r"\begin{array}{" + colspec + "}")
+        lines.append(self._vansterjusterat_array(colspec))
         for rad in range(rows):
             radceller = []
             for kol in range(cols):
                 cell = matris[rad][kol]
                 if cell:
-                    radceller.append(r"\begin{array}{l}" + cell + r"\end{array}")
+                    radceller.append(self._vansterjusterat_array("l") + cell + r"\end{array}")
                 else:
                     radceller.append("")
             lines.append(" & ".join(radceller) + r"\\[1em]")

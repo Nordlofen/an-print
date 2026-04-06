@@ -304,6 +304,24 @@ class CalcBlock:
         baskolumner = "lcll" if etikettkolumn else "lcl"
         return baskolumner * antal_kolumner
 
+    def _vansterjusterat_array(self, colspec):
+        """
+        Bygger startsträngen för ett ``array`` utan synlig vänstermarginal.
+
+        När ``@{}`` inte används lägger ``array`` in standardluft till vänster.
+        En liten negativ horizontalspacer neutraliserar detta och fungerar i
+        både notebook och KaTeX/VSCode.
+
+        Parametrar:
+            colspec : str
+                Kolumnspec för arraymiljön.
+
+        Returvärde:
+            str
+                Startsträng för arraymiljön.
+        """
+        return r"\hspace{-0.6em}\begin{array}{" + colspec + "}"
+
     def _build_section_block(self, section, etikett=False, decimals=None, rader=None):
         """
         Bygger ett LaTeX-block för en sektion som innehåller dataposter.
@@ -330,10 +348,10 @@ class CalcBlock:
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
-        lines.append(r"\begin{array}{l}")
+        lines.append(self._vansterjusterat_array("l"))
         lines.append(r"\textbf{" + section["title"] + r"}\\")
         colspec = self._array_colspec(len(kolumner))
-        lines.append(r"\begin{array}{" + colspec + "}")
+        lines.append(self._vansterjusterat_array(colspec))
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
         for radindex in range(max_rader):
@@ -380,10 +398,10 @@ class CalcBlock:
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
-        lines.append(r"\begin{array}{l}")
+        lines.append(self._vansterjusterat_array("l"))
         lines.append(r"\textbf{" + section["title"] + r"}\\")
         colspec = self._array_colspec(len(kolumner))
-        lines.append(r"\begin{array}{" + colspec + "}")
+        lines.append(self._vansterjusterat_array(colspec))
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
         for radindex in range(max_rader):
