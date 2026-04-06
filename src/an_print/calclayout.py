@@ -34,6 +34,25 @@ class CalcLayout:
             cleaned = cleaned[:-1]
         return cleaned.strip()
 
+    def _sanera_for_katex(self, latex):
+        """
+        Förenklar vissa LaTeX-konstruktioner för bättre KaTeX-stöd i VSCode.
+
+        Framför allt saneras äldre block som redan kan ha genererats med
+        ``@{}`` i ``array``-kolumnspecen innan objektet renderas i layouten.
+
+        Parametrar:
+            latex : str
+                LaTeX-sträng som ska saneras.
+
+        Returvärde:
+            str
+                KaTeX-vänligare LaTeX-sträng.
+        """
+        import re
+
+        return re.sub(r"@\{[^}]*\}", "", latex)
+
     def _visa(self, latex):
         """
         Visar en LaTeX-sträng i notebookmiljö.
@@ -157,6 +176,7 @@ class CalcLayout:
             if not (0 <= rad < rows and 0 <= kol < cols):
                 raise ValueError(f"Positionen för {blocknamn} ligger utanför angivet rutnät.")
             latex = self._hamta_block(calcblock_objekt, blocknamn)
+            latex = self._sanera_for_katex(latex)
             matris[rad][kol] = self._strip_math_wrappers(latex)
 
         colspec = self._array_colspec(cols)
