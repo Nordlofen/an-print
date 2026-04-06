@@ -34,6 +34,27 @@ class CalcLayout:
             cleaned = cleaned[:-1]
         return cleaned.strip()
 
+    def _sanera_for_katex(self, latex):
+        """
+        Förenklar vissa LaTeX-konstruktioner för bättre KaTeX-stöd i VSCode.
+
+        Framför allt saneras äldre block som redan kan ha genererats med
+        ``@{}`` i ``array``-kolumnspecen innan objektet renderas i layouten.
+
+        Parametrar:
+            latex : str
+                LaTeX-sträng som ska saneras.
+
+        Returvärde:
+            str
+                KaTeX-vänligare LaTeX-sträng.
+        """
+        import re
+
+        latex = re.sub(r"@\{[^}]*\}", "", latex)
+        latex = re.sub(r"\\begin\{array\}\[[^\]]*\]", r"\\begin{array}", latex)
+        return latex
+
     def _visa(self, latex):
         """
         Visar en LaTeX-sträng i notebookmiljö.
@@ -47,7 +68,39 @@ class CalcLayout:
         except ModuleNotFoundError:
             return
 
+        latex = self._sanera_for_katex(latex)
         display(Latex(latex))
+
+    def _array_colspec(self, antal_kolumner):
+        """
+        Bygger en enkel KaTeX-kompatibel kolumnspec för layoutmatrisen.
+
+        VSCode:s KaTeX-renderare stöder inte ``@{}`` i ``array``-kolumnspecen,
+        så layouten använder endast enkla vänsterjusterade kolumner.
+
+        Parametrar:
+            antal_kolumner : int
+                Antal kolumner i layouten.
+
+        Returvärde:
+            str
+                Kolumnspec för ``array``.
+        """
+        return "l" * antal_kolumner
+
+    def _vansterjusterat_array(self, colspec):
+        """
+        Bygger startsträngen för ett ``array`` utan synlig vänstermarginal.
+
+        Parametrar:
+            colspec : str
+                Kolumnspec för arraymiljön.
+
+        Returvärde:
+            str
+                Startsträng för arraymiljön.
+        """
+        return r"\hspace{-0.6em}\begin{array}{" + colspec + "}"
 
     def _hamta_block(self, calcblock_objekt, blocknamn):
         """
@@ -140,17 +193,18 @@ class CalcLayout:
             if not (0 <= rad < rows and 0 <= kol < cols):
                 raise ValueError(f"Positionen för {blocknamn} ligger utanför angivet rutnät.")
             latex = self._hamta_block(calcblock_objekt, blocknamn)
+            latex = self._sanera_for_katex(latex)
             matris[rad][kol] = self._strip_math_wrappers(latex)
 
-        colspec = "@{}" + "l" * cols + "@{}"
+        colspec = self._array_colspec(cols)
         lines = [r"$"]
-        lines.append(r"\begin{array}{" + colspec + "}")
+        lines.append(self._vansterjusterat_array(colspec))
         for rad in range(rows):
             radceller = []
             for kol in range(cols):
                 cell = matris[rad][kol]
                 if cell:
-                    radceller.append(r"\begin{array}[t]{@{}l@{}}" + cell + r"\end{array}")
+                    radceller.append(self._vansterjusterat_array("l") + cell + r"\end{array}")
                 else:
                     radceller.append("")
             lines.append(" & ".join(radceller) + r"\\[1em]")
