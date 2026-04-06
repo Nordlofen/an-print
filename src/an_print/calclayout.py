@@ -49,6 +49,23 @@ class CalcLayout:
 
         display(Latex(latex))
 
+    def _array_colspec(self, antal_kolumner):
+        """
+        Bygger en enkel KaTeX-kompatibel kolumnspec för layoutmatrisen.
+
+        VSCode:s KaTeX-renderare stöder inte ``@{}`` i ``array``-kolumnspecen,
+        så layouten använder endast enkla vänsterjusterade kolumner.
+
+        Parametrar:
+            antal_kolumner : int
+                Antal kolumner i layouten.
+
+        Returvärde:
+            str
+                Kolumnspec för ``array``.
+        """
+        return "l" * antal_kolumner
+
     def _hamta_block(self, calcblock_objekt, blocknamn):
         """
         Hämtar ett redan genererat block från ett CalcBlock-objekt.
@@ -142,7 +159,7 @@ class CalcLayout:
             latex = self._hamta_block(calcblock_objekt, blocknamn)
             matris[rad][kol] = self._strip_math_wrappers(latex)
 
-        colspec = "@{}" + "l" * cols + "@{}"
+        colspec = self._array_colspec(cols)
         lines = [r"$"]
         lines.append(r"\begin{array}{" + colspec + "}")
         for rad in range(rows):
@@ -150,7 +167,7 @@ class CalcLayout:
             for kol in range(cols):
                 cell = matris[rad][kol]
                 if cell:
-                    radceller.append(r"\begin{array}[t]{@{}l@{}}" + cell + r"\end{array}")
+                    radceller.append(r"\begin{array}[t]{l}" + cell + r"\end{array}")
                 else:
                     radceller.append("")
             lines.append(" & ".join(radceller) + r"\\[1em]")

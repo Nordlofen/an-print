@@ -265,6 +265,27 @@ class CalcBlock:
 
         return [items[i:i + rader] for i in range(0, len(items), rader)]
 
+    def _array_colspec(self, antal_kolumner, etikettkolumn=True):
+        """
+        Bygger en KaTeX-kompatibel kolumnspec för ``array``.
+
+        VSCode:s notebook-rendering via KaTeX stöder inte LaTeX-justeringar av
+        typen ``@{...}``, så vi håller oss till enkla kolumnmarkörer.
+
+        Parametrar:
+            antal_kolumner : int
+                Antal interna datakolumner i blocket.
+
+            etikettkolumn : bool, optional
+                Om True inkluderas den fjärde kolumnen för etiketttext.
+
+        Returvärde:
+            str
+                Kolumnspec för ``array``.
+        """
+        baskolumner = "lcll" if etikettkolumn else "lcl"
+        return baskolumner * antal_kolumner
+
     def _build_section_block(self, section, etikett=False, decimals=None, rader=None):
         """
         Bygger ett LaTeX-block för en sektion som innehåller dataposter.
@@ -291,9 +312,9 @@ class CalcBlock:
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
-        lines.append(r"\begin{array}[t]{@{}l@{}}")
+        lines.append(r"\begin{array}[t]{l}")
         lines.append(r"\textbf{" + section["title"] + r"}\\")
-        colspec = " ".join([r"@{}l c l l@{}" for _ in kolumner])
+        colspec = self._array_colspec(len(kolumner))
         lines.append(r"\begin{array}[t]{" + colspec + "}")
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
@@ -341,9 +362,9 @@ class CalcBlock:
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
-        lines.append(r"\begin{array}[t]{@{}l@{}}")
+        lines.append(r"\begin{array}[t]{l}")
         lines.append(r"\textbf{" + section["title"] + r"}\\")
-        colspec = " ".join([r"@{}l c l l@{}" for _ in kolumner])
+        colspec = self._array_colspec(len(kolumner))
         lines.append(r"\begin{array}[t]{" + colspec + "}")
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
