@@ -312,10 +312,10 @@ class CalcBlock:
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
-        lines.append(r"\begin{array}[t]{l}")
+        lines.append(r"\begin{array}{l}")
         lines.append(r"\textbf{" + section["title"] + r"}\\")
         colspec = self._array_colspec(len(kolumner))
-        lines.append(r"\begin{array}[t]{" + colspec + "}")
+        lines.append(r"\begin{array}{" + colspec + "}")
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
         for radindex in range(max_rader):
@@ -362,10 +362,10 @@ class CalcBlock:
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
-        lines.append(r"\begin{array}[t]{l}")
+        lines.append(r"\begin{array}{l}")
         lines.append(r"\textbf{" + section["title"] + r"}\\")
         colspec = self._array_colspec(len(kolumner))
-        lines.append(r"\begin{array}[t]{" + colspec + "}")
+        lines.append(r"\begin{array}{" + colspec + "}")
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
         for radindex in range(max_rader):

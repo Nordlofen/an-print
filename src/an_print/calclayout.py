@@ -51,7 +51,9 @@ class CalcLayout:
         """
         import re
 
-        return re.sub(r"@\{[^}]*\}", "", latex)
+        latex = re.sub(r"@\{[^}]*\}", "", latex)
+        latex = latex.replace(r"\begin{array}[t]", r"\begin{array}")
+        return latex
 
     def _visa(self, latex):
         """
@@ -187,7 +189,7 @@ class CalcLayout:
             for kol in range(cols):
                 cell = matris[rad][kol]
                 if cell:
-                    radceller.append(r"\begin{array}[t]{l}" + cell + r"\end{array}")
+                    radceller.append(r"\begin{array}{l}" + cell + r"\end{array}")
                 else:
                     radceller.append("")
             lines.append(" & ".join(radceller) + r"\\[1em]")
