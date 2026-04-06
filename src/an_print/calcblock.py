@@ -25,6 +25,11 @@ class CalcBlock:
         self.latex_dr = None
         self.latex_sr = None
         self.latex_ekv = None
+        self.html_mb = None
+        self.html_id = None
+        self.html_dr = None
+        self.html_sr = None
+        self.html_ekv = None
 
     def _escape_text(self, text):
         """
@@ -52,6 +57,22 @@ class CalcBlock:
         for old, new in replacements.items():
             escaped = escaped.replace(old, new)
         return escaped
+
+    def _escape_html(self, text):
+        """
+        Escapar vanlig text för säker HTML-rendering.
+
+        Parametrar:
+            text : str
+                Text som ska renderas i HTML.
+
+        Returvärde:
+            str
+                Escapad text.
+        """
+        import html
+
+        return html.escape(str(text), quote=True)
 
     def _wrap_text(self, text, width=85):
         """
@@ -195,6 +216,29 @@ class CalcBlock:
         mantissa_str = f"{mantissa:.{decimals}f}"
         return mantissa_str + r" \cdot 10^{" + str(exponent) + "}"
 
+    def _format_scientific_html(self, value, decimals=3):
+        """
+        Formaterar ett numeriskt värde i tiopotensform för HTML.
+
+        Parametrar:
+            value : float | int
+                Numeriskt värde som ska formateras.
+
+            decimals : int, optional
+                Antal decimaler för mantissan.
+
+        Returvärde:
+            str
+                HTML-formaterad sträng i formen ``a · 10`` med exponent.
+        """
+        if value == 0:
+            return "0"
+
+        exponent = int(f"{value:e}".split("e")[1])
+        mantissa = value / (10 ** exponent)
+        mantissa_str = self._escape_html(f"{mantissa:.{decimals}f}")
+        return f'{mantissa_str} &middot; 10<sup>{exponent}</sup>'
+
     def _format_unit(self, unit):
         """
         Formaterar enhetstext till LaTeX-vänlig notation.
@@ -215,6 +259,29 @@ class CalcBlock:
             return r"\tiny{[\mathrm{" + bas + "}^{"+ exponent + "}]} "
 
         return r"\tiny{[\mathrm{" + unit + "}]} "
+
+    def _format_unit_html(self, unit):
+        """
+        Formaterar enhet för HTML-visning.
+
+        Parametrar:
+            unit : str
+                Enhet i enkel textform.
+
+        Returvärde:
+            str
+                HTML-formaterad enhet.
+        """
+        if not unit:
+            return ""
+
+        if "^" in unit:
+            bas, exponent = unit.split("^", 1)
+            unit_html = f"{self._escape_html(bas)}<sup>{self._escape_html(exponent)}</sup>"
+        else:
+            unit_html = self._escape_html(unit)
+
+        return f'<span class="anp-data-block__unit">[{unit_html}]</span>'
 
     def _format_value(self, item, decimals_override=None):
         """
@@ -247,6 +314,176 @@ class CalcBlock:
         if item.get("unit"):
             return formatted + r"\ " + self._format_unit(item["unit"])
         return formatted
+
+    def _format_value_html(self, item, decimals_override=None):
+        """
+        Formaterar högerledet för en datapost i HTML.
+
+        Parametrar:
+            item : dict
+                Datapost med nycklar som ``value`` och eventuellt ``unit``.
+
+            decimals_override : dict[str, int] | None, optional
+                Valfri dictionary som tillfälligt överstyr antal decimaler.
+
+        Returvärde:
+            str
+                HTML-formaterat högerled.
+        """
+        value = item["value"]
+        if isinstance(value, str):
+            formatted = self._escape_html(value)
+        else:
+            decimals = self._get_item_decimals(item, decimals_override=decimals_override)
+            if item.get("unit") == "mm^4":
+                formatted = self._format_scientific_html(value, decimals=decimals)
+            else:
+                formatted = self._escape_html(self._fmt(value, decimals))
+
+        unit_html = self._format_unit_html(item.get("unit", ""))
+        if unit_html:
+            return f'{formatted} {unit_html}'
+        return formatted
+
+    def _latex_to_html(self, latex):
+        """
+        Konverterar enkel inline-LaTeX till HTML utan beroende av MathJax.
+
+        Den här vägen är avsiktligt begränsad till de uttryck som används i
+        ``ID``, ``DR`` och ``SR``.
+
+        Parametrar:
+            latex : str
+                Inline-LaTeX som exempelvis ``I_y`` eller ``f_{c,0,k}``.
+
+        Returvärde:
+            str
+                HTML-sträng för uttrycket.
+        """
+        greek = {
+            "alpha": "α",
+            "beta": "β",
+            "gamma": "γ",
+            "Gamma": "Γ",
+            "lambda": "λ",
+            "Lambda": "Λ",
+            "mu": "μ",
+            "rho": "ρ",
+            "sigma": "σ",
+            "tau": "τ",
+            "phi": "φ",
+            "varphi": "φ",
+            "chi": "χ",
+            "psi": "ψ",
+            "omega": "ω",
+        }
+
+        def skip_ws(text, idx):
+            while idx < len(text) and text[idx].isspace():
+                idx += 1
+            return idx
+
+        def read_command(text, idx):
+            idx += 1
+            start = idx
+            while idx < len(text) and text[idx].isalpha():
+                idx += 1
+            if start == idx and idx < len(text):
+                idx += 1
+            return text[start:idx], idx
+
+        def read_group(text, idx):
+            idx = skip_ws(text, idx)
+            if idx >= len(text):
+                return "", idx
+            if text[idx] == "{":
+                depth = 1
+                idx += 1
+                start = idx
+                while idx < len(text) and depth > 0:
+                    if text[idx] == "{":
+                        depth += 1
+                    elif text[idx] == "}":
+                        depth -= 1
+                    idx += 1
+                return text[start:idx - 1], idx
+            return text[idx], idx + 1
+
+        def render_segment(text):
+            parts = []
+            idx = 0
+            while idx < len(text):
+                char = text[idx]
+
+                if char == "\\":
+                    cmd, idx = read_command(text, idx)
+
+                    if cmd in greek:
+                        parts.append(greek[cmd])
+                        continue
+
+                    if cmd in {"left", "right"}:
+                        idx = skip_ws(text, idx)
+                        continue
+
+                    if cmd == "frac":
+                        num, idx = read_group(text, idx)
+                        den, idx = read_group(text, idx)
+                        parts.append(
+                            '<span class="anp-frac">'
+                            f'<span class="anp-frac__num">{render_segment(num)}</span>'
+                            f'<span class="anp-frac__den">{render_segment(den)}</span>'
+                            "</span>"
+                        )
+                        continue
+
+                    if cmd == "sqrt":
+                        body, idx = read_group(text, idx)
+                        parts.append(
+                            '<span class="anp-sqrt">'
+                            '<span class="anp-sqrt__sign">&radic;</span>'
+                            f'<span class="anp-sqrt__body">{render_segment(body)}</span>'
+                            "</span>"
+                        )
+                        continue
+
+                    if cmd in {"mathrm", "text"}:
+                        body, idx = read_group(text, idx)
+                        parts.append(render_segment(body))
+                        continue
+
+                    if cmd == "cdot":
+                        parts.append("&middot;")
+                        continue
+
+                    if cmd == ",":
+                        parts.append(" ")
+                        continue
+
+                    parts.append(self._escape_html("\\" + cmd))
+                    continue
+
+                if char in "_^":
+                    tag = "sub" if char == "_" else "sup"
+                    group, idx = read_group(text, idx + 1)
+                    parts.append(f"<{tag}>{render_segment(group)}</{tag}>")
+                    continue
+
+                if char in "{}":
+                    idx += 1
+                    continue
+
+                if char == "~":
+                    parts.append("&nbsp;")
+                    idx += 1
+                    continue
+
+                parts.append(self._escape_html(char))
+                idx += 1
+
+            return "".join(parts)
+
+        return render_segment(str(latex).strip())
 
     def _format_etikett(self, text):
         """
@@ -304,13 +541,9 @@ class CalcBlock:
         baskolumner = "lcll" if etikettkolumn else "lcl"
         return baskolumner * antal_kolumner
 
-    def _vansterjusterat_array(self, colspec):
+    def _array_start(self, colspec):
         """
-        Bygger startsträngen för ett ``array`` utan synlig vänstermarginal.
-
-        När ``@{}`` inte används lägger ``array`` in standardluft till vänster.
-        En liten negativ horizontalspacer neutraliserar detta och fungerar i
-        både notebook och KaTeX/VSCode.
+        Bygger startsträngen för ett ``array``.
 
         Parametrar:
             colspec : str
@@ -320,7 +553,7 @@ class CalcBlock:
             str
                 Startsträng för arraymiljön.
         """
-        return r"\hspace{-0.6em}\begin{array}{" + colspec + "}"
+        return r"\begin{array}{" + colspec + "}"
 
     def _build_section_block(self, section, etikett=False, decimals=None, rader=None):
         """
@@ -348,10 +581,10 @@ class CalcBlock:
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
-        lines.append(self._vansterjusterat_array("l"))
+        lines.append(self._array_start("l"))
         lines.append(r"\textbf{" + section["title"] + r"}\\")
         colspec = self._array_colspec(len(kolumner))
-        lines.append(self._vansterjusterat_array(colspec))
+        lines.append(self._array_start(colspec))
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
         for radindex in range(max_rader):
@@ -398,10 +631,10 @@ class CalcBlock:
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
-        lines.append(self._vansterjusterat_array("l"))
+        lines.append(self._array_start("l"))
         lines.append(r"\textbf{" + section["title"] + r"}\\")
         colspec = self._array_colspec(len(kolumner))
-        lines.append(self._vansterjusterat_array(colspec))
+        lines.append(self._array_start(colspec))
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
         for radindex in range(max_rader):
@@ -464,6 +697,134 @@ class CalcBlock:
         lines.append(r"$")
         return "\n".join(lines)
 
+    def _build_method_block_html(self, section):
+        """
+        Bygger ett HTML-block för metodbeskrivning.
+
+        Parametrar:
+            section : dict
+                Sektion med ``title`` och ``items`` där varje post innehåller
+                ``rubrik`` och ``text``.
+
+        Returvärde:
+            str
+                HTML-kod för metodbeskrivningen.
+        """
+        parts = [
+            '<section class="anp-method-block">',
+            f'<h3 class="anp-method-block__title">{self._escape_html(section["title"])}</h3>',
+        ]
+
+        for item in section["items"]:
+            rubrik = self._escape_html(item.get("rubrik", ""))
+            text = self._escape_html(item.get("text", ""))
+            text = text.replace("\n", "<br>")
+            parts.append('<div class="anp-method-block__item">')
+            parts.append(f'<h4 class="anp-method-block__heading">{rubrik}</h4>')
+            parts.append(f'<p class="anp-method-block__text">{text}</p>')
+            parts.append("</div>")
+
+        parts.append("</section>")
+        return "\n".join(parts)
+
+    def _build_section_block_html(self, section, etikett=False, decimals=None, rader=None):
+        """
+        Bygger ett HTML-block för en datasektion.
+
+        Parametrar:
+            section : dict
+                Sektion med ``title`` och ``items``.
+
+            etikett : bool, optional
+                Om True visas etiketttext för varje post.
+
+            decimals : dict[str, int] | None, optional
+                Tillfällig override av antal decimaler.
+
+            rader : int | None, optional
+                Maximalt antal rader per intern kolumn.
+
+        Returvärde:
+            str
+                HTML-kod för sektionen.
+        """
+        kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
+        parts = [
+            f'<section class="anp-data-block anp-data-block--cols-{len(kolumner)}">',
+            f'<h3 class="anp-data-block__title">{self._escape_html(section["title"])}</h3>',
+            f'<div class="anp-data-block__columns" style="--anp-cols: {len(kolumner)};">',
+        ]
+
+        for kolumn in kolumner:
+            parts.append('<div class="anp-data-block__column">')
+            for item in kolumn:
+                lhs = self._latex_to_html(item["latex"])
+                rhs = self._format_value_html(item, decimals_override=decimals)
+                parts.append('<div class="anp-data-block__row">')
+                parts.append(f'<div class="anp-data-block__lhs">{lhs}</div>')
+                parts.append('<div class="anp-data-block__eq">=</div>')
+                parts.append(f'<div class="anp-data-block__rhs">{rhs}</div>')
+                if etikett and item.get("etikett"):
+                    etikett_text = self._escape_html(item["etikett"])
+                    parts.append(f'<div class="anp-data-block__etikett">{etikett_text}</div>')
+                parts.append("</div>")
+            parts.append("</div>")
+
+        parts.append("</div>")
+        parts.append("</section>")
+        return "\n".join(parts)
+
+    def _build_equation_block_html(self, section, etikett=False, rader=None):
+        """
+        Bygger ett HTML-block för en ekvationssektion.
+
+        Parametrar:
+            section : dict
+                Sektion med ``title`` och ``items``.
+
+            etikett : bool, optional
+                Om True visas etiketttext för varje ekvation.
+
+            rader : int | None, optional
+                Maximalt antal rader per intern kolumn.
+
+        Returvärde:
+            str
+                HTML-kod för sektionen.
+        """
+        kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
+        parts = [
+            f'<section class="anp-eq-block anp-eq-block--cols-{len(kolumner)}">',
+            f'<h3 class="anp-eq-block__title">{self._escape_html(section["title"])}</h3>',
+            f'<div class="anp-eq-block__columns" style="--anp-cols: {len(kolumner)};">',
+        ]
+
+        for kolumn in kolumner:
+            parts.append('<div class="anp-eq-block__column">')
+            for item in kolumn:
+                uttryck = item["latex"]
+                if "=" in uttryck:
+                    vanster, hoger = uttryck.split("=", 1)
+                else:
+                    vanster, hoger = uttryck, ""
+
+                vanster_html = self._latex_to_html(vanster.strip())
+                hoger_html = self._latex_to_html(hoger.strip()) if hoger.strip() else ""
+
+                parts.append('<div class="anp-eq-block__row">')
+                parts.append(f'<div class="anp-eq-block__lhs">{vanster_html}</div>')
+                parts.append('<div class="anp-eq-block__eq">=</div>')
+                parts.append(f'<div class="anp-eq-block__rhs">{hoger_html}</div>')
+                if etikett and item.get("etikett"):
+                    etikett_text = self._escape_html(item["etikett"])
+                    parts.append(f'<div class="anp-eq-block__etikett">{etikett_text}</div>')
+                parts.append("</div>")
+            parts.append("</div>")
+
+        parts.append("</div>")
+        parts.append("</section>")
+        return "\n".join(parts)
+
     def _visa(self, latex):
         """
         Visar en LaTeX-sträng i notebookmiljö.
@@ -502,6 +863,9 @@ class CalcBlock:
         self.latex_id = self._build_section_block(
             self.details["indata"], etikett=etikett, decimals=decimals, rader=rader
         )
+        self.html_id = self._build_section_block_html(
+            self.details["indata"], etikett=etikett, decimals=decimals, rader=rader
+        )
         self.latex = self.latex_id
         if visa:
             self._visa(self.latex_id)
@@ -515,6 +879,7 @@ class CalcBlock:
                 Om True renderas blocket direkt i notebook.
         """
         self.latex_mb = self._build_method_block(self.details["metodbeskrivning"])
+        self.html_mb = self._build_method_block_html(self.details["metodbeskrivning"])
         self.latex = self.latex_mb
         if visa:
             self._visa(self.latex_mb)
@@ -539,6 +904,9 @@ class CalcBlock:
                 en enda kolumn utan maxtak.
         """
         self.latex_dr = self._build_section_block(
+            self.details["delresultat"], etikett=etikett, decimals=decimals, rader=rader
+        )
+        self.html_dr = self._build_section_block_html(
             self.details["delresultat"], etikett=etikett, decimals=decimals, rader=rader
         )
         self.latex = self.latex_dr
@@ -567,6 +935,9 @@ class CalcBlock:
         self.latex_sr = self._build_section_block(
             self.details["slutresultat"], etikett=etikett, decimals=decimals, rader=rader
         )
+        self.html_sr = self._build_section_block_html(
+            self.details["slutresultat"], etikett=etikett, decimals=decimals, rader=rader
+        )
         self.latex = self.latex_sr
         if visa:
             self._visa(self.latex_sr)
@@ -592,6 +963,9 @@ class CalcBlock:
                 en enda kolumn utan maxtak.
         """
         self.latex_ekv = self._build_equation_block(
+            self.details["ekvationer"], etikett=etikett, rader=rader
+        )
+        self.html_ekv = self._build_equation_block_html(
             self.details["ekvationer"], etikett=etikett, rader=rader
         )
         self.latex = self.latex_ekv
