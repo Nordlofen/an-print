@@ -52,7 +52,7 @@ class CalcLayout:
         import re
 
         latex = re.sub(r"@\{[^}]*\}", "", latex)
-        latex = latex.replace(r"\begin{array}[t]", r"\begin{array}")
+        latex = re.sub(r"\\begin\{array\}\[[^\]]*\]", r"\\begin{array}", latex)
         return latex
 
     def _visa(self, latex):
@@ -68,6 +68,7 @@ class CalcLayout:
         except ModuleNotFoundError:
             return
 
+        latex = self._sanera_for_katex(latex)
         display(Latex(latex))
 
     def _array_colspec(self, antal_kolumner):

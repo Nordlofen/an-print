@@ -72,6 +72,24 @@ class CalcBlock:
 
         return textwrap.wrap(str(text), width=width, break_long_words=False, break_on_hyphens=False)
 
+    def _sanera_for_katex(self, latex):
+        """
+        Förenklar vissa LaTeX-konstruktioner för bättre KaTeX-stöd i VSCode.
+
+        Parametrar:
+            latex : str
+                LaTeX-sträng som ska saneras.
+
+        Returvärde:
+            str
+                KaTeX-vänligare LaTeX-sträng.
+        """
+        import re
+
+        latex = re.sub(r"@\{[^}]*\}", "", latex)
+        latex = re.sub(r"\\begin\{array\}\[[^\]]*\]", r"\\begin{array}", latex)
+        return latex
+
     def _fmt(self, value, decimals=3):
         """
         Formaterar ett numeriskt värde till sträng med valt antal decimaler.
@@ -441,6 +459,7 @@ class CalcBlock:
         except ModuleNotFoundError:
             return
 
+        latex = self._sanera_for_katex(latex)
         display(Latex(latex))
 
     def ID(self, visa=False, etikett=False, decimals=None, rader=None):
