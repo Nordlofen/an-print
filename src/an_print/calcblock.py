@@ -126,9 +126,52 @@ class CalcBlock:
             str
                 Formaterat värde som sträng.
         """
+        if isinstance(value, bool):
+            return "Ja" if value else "Nej"
         if isinstance(value, (int, float)):
             return f"{value:.{decimals}f}"
         return str(value)
+
+    def _format_text_value(self, value):
+        """
+        Formaterar textuella värden för visning i textläge.
+
+        Parametrar:
+            value : str | bool
+                Värde som ska visas.
+
+        Returvärde:
+            str
+                LaTeX-säker textrepresentation.
+        """
+        if isinstance(value, bool):
+            text = "Ja" if value else "Nej"
+        else:
+            text = str(value).replace("_", " ")
+        return r"\text{" + self._escape_text(text) + "}"
+
+    def _format_lhs(self, item):
+        """
+        Formaterar vänsterledet för en datapost.
+
+        Parametrar:
+            item : dict
+                Datapost med nycklar som ``latex`` och ``value``.
+
+        Returvärde:
+            str
+                LaTeX-kod för vänsterledet.
+        """
+        value = item.get("value")
+        lhs = str(item.get("latex", ""))
+
+        if isinstance(value, (str, bool)):
+            if any(token in lhs for token in ("_", "^", "\\")):
+                return lhs
+            lhs_text = lhs.replace("_", " ")
+            return r"\text{" + self._escape_text(lhs_text) + "}"
+
+        return lhs
 
     def _get_item_decimals(self, item, decimals_override=None):
         """
@@ -168,6 +211,9 @@ class CalcBlock:
 
         value = item.get("value")
         unit = item.get("unit", "")
+
+        if isinstance(value, bool):
+            return 0
 
         if not isinstance(value, (int, float)):
             return 0
@@ -300,10 +346,12 @@ class CalcBlock:
                 Formaterat högerled i LaTeX-vänlig textform.
         """
         value = item["value"]
-        if isinstance(value, str):
-            if item.get("unit"):
-                return value + r"\ " + self._format_unit(item["unit"])
-            return r"\text{" + value + "}"
+        if isinstance(value, (str, bool)):
+            formatted = self._format_text_value(value)
+            unit = item.get("unit", "")
+            if unit and unit != "-":
+                return formatted + r"\ " + self._format_unit(unit)
+            return formatted
 
         decimals = self._get_item_decimals(item, decimals_override=decimals_override)
 
@@ -311,8 +359,9 @@ class CalcBlock:
             formatted = self._format_scientific(value, decimals=decimals)
         else:
             formatted = self._fmt(value, decimals)
-        if item.get("unit"):
-            return formatted + r"\ " + self._format_unit(item["unit"])
+        unit = item.get("unit", "")
+        if unit and unit != "-":
+            return formatted + r"\ " + self._format_unit(unit)
         return formatted
 
     def _format_value_html(self, item, decimals_override=None):
@@ -331,8 +380,12 @@ class CalcBlock:
                 HTML-formaterat högerled.
         """
         value = item["value"]
-        if isinstance(value, str):
-            formatted = self._escape_html(value)
+        if isinstance(value, (str, bool)):
+            if isinstance(value, bool):
+                text = "Ja" if value else "Nej"
+            else:
+                text = str(value).replace("_", " ")
+            formatted = self._escape_html(text)
         else:
             decimals = self._get_item_decimals(item, decimals_override=decimals_override)
             if item.get("unit") == "mm^4":
@@ -340,7 +393,8 @@ class CalcBlock:
             else:
                 formatted = self._escape_html(self._fmt(value, decimals))
 
-        unit_html = self._format_unit_html(item.get("unit", ""))
+        unit = item.get("unit", "")
+        unit_html = self._format_unit_html(unit if unit != "-" else "")
         if unit_html:
             return f'{formatted} {unit_html}'
         return formatted
@@ -592,7 +646,7 @@ class CalcBlock:
             for kolumn in kolumner:
                 if radindex < len(kolumn):
                     item = kolumn[radindex]
-                    lhs = item["latex"]
+                    lhs = self._format_lhs(item)
                     rhs = self._format_value(item, decimals_override=decimals)
                     kommentar = (
                         self._format_etikett(item["etikett"])
@@ -760,8 +814,11 @@ class CalcBlock:
             for item in kolumn:
                 lhs = self._latex_to_html(item["latex"])
                 rhs = self._format_value_html(item, decimals_override=decimals)
+                lhs_class = "anp-data-block__lhs"
+                if isinstance(item.get("value"), (str, bool)):
+                    lhs_class += " anp-data-block__lhs--text"
                 parts.append('<div class="anp-data-block__row">')
-                parts.append(f'<div class="anp-data-block__lhs">{lhs}</div>')
+                parts.append(f'<div class="{lhs_class}">{lhs}</div>')
                 parts.append('<div class="anp-data-block__eq">=</div>')
                 parts.append(f'<div class="anp-data-block__rhs">{rhs}</div>')
                 if etikett and item.get("etikett"):
