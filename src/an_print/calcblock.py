@@ -551,7 +551,7 @@ class CalcBlock:
             str
                 LaTeX-kod för etiketten.
         """
-        return r"\tiny{\text{" + text + r"}}"
+        return r"\tiny{\text{" + self._escape_text(text) + r"}}"
 
     def _dela_items_i_kolumner(self, items, rader=None):
         """
@@ -637,7 +637,7 @@ class CalcBlock:
         lines = [r"$"]
         lines.append(self._array_start("l"))
         lines.append(r"\textbf{" + section["title"] + r"}\\")
-        colspec = self._array_colspec(len(kolumner))
+        colspec = "lcl" * len(kolumner)
         lines.append(self._array_start(colspec))
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
@@ -687,7 +687,7 @@ class CalcBlock:
         lines = [r"$"]
         lines.append(self._array_start("l"))
         lines.append(r"\textbf{" + section["title"] + r"}\\")
-        colspec = self._array_colspec(len(kolumner))
+        colspec = "lcl" * len(kolumner)
         lines.append(self._array_start(colspec))
 
         max_rader = max(len(kolumn) for kolumn in kolumner)
@@ -696,11 +696,6 @@ class CalcBlock:
             for kolumn in kolumner:
                 if radindex < len(kolumn):
                     item = kolumn[radindex]
-                    kommentar = (
-                        self._format_etikett(item["etikett"])
-                        if etikett and item.get("etikett")
-                        else ""
-                    )
                     uttryck = item["latex"]
                     if "=" in uttryck:
                         vanster, hoger = uttryck.split("=", 1)
@@ -709,9 +704,11 @@ class CalcBlock:
                     else:
                         vanster = uttryck
                         hoger = ""
-                    radceller.extend([vanster, "=", hoger, kommentar])
+                    if etikett and item.get("etikett"):
+                        hoger = hoger + r"\quad " + self._format_etikett(item["etikett"])
+                    radceller.extend([vanster, "=", hoger])
                 else:
-                    radceller.extend(["", "", "", ""])
+                    radceller.extend(["", "", ""])
             lines.append(" & ".join(radceller) + r"\\")
 
         lines.append(r"\end{array}")
