@@ -39,8 +39,9 @@ class Panel:
         self._block_widgets = {}
         self._style = {"description_width": "0px"}
         self._input_layout = self._widgets.Layout(width="180px")
-        self._label_layout = self._widgets.Layout(width="320px")
-        self._field_row_layout = self._widgets.Layout(width="520px", align_items="center")
+        self._label_layout = self._widgets.Layout(width="255px")
+        self._symbol_layout = self._widgets.Layout(width="50px")
+        self._field_row_layout = self._widgets.Layout(width="535px", align_items="center")
         self.widget = self._build_widget()
 
     def _load_widgets(self):
@@ -111,7 +112,8 @@ class Panel:
     def _field_row(self, field, control):
         widgets = self._widgets
         label = widgets.Label(self._field_label(field), layout=self._label_layout)
-        return widgets.HBox([label, control], layout=self._field_row_layout)
+        symbol = widgets.HTML(self._field_symbol(field), layout=self._symbol_layout)
+        return widgets.HBox([label, symbol, control], layout=self._field_row_layout)
 
     def _build_blocks_box(self):
         widgets = self._widgets
@@ -172,6 +174,10 @@ class Panel:
         unit = field.get("unit", "")
         label = field.get("label", field["name"])
         return f"{label} [{unit}]" if unit else label
+
+    def _field_symbol(self, field):
+        symbol = field.get("symbol") or field.get("latex") or field.get("name", "")
+        return f"<span>{symbol}</span>"
 
     def _make_field_widget(self, field):
         widgets = self._widgets
@@ -267,7 +273,7 @@ class _TableInput:
     def __init__(self, widgets, field):
         self.widgets = widgets
         self.field = field
-        self._input_layout = widgets.Layout(width="140px")
+        self._input_layout = widgets.Layout(width="120px")
         self._style = {"description_width": "0px"}
         self.rows_box = widgets.VBox([])
         self.rows = []
@@ -279,28 +285,47 @@ class _TableInput:
     def _build_widget(self):
         widgets = self.widgets
         title = self.field.get("label", self.field["name"])
-        add_button = widgets.Button(description="Lägg till rad")
+        add_button = widgets.Button(description="+ Lägg till rad", layout=widgets.Layout(width="150px"))
         add_button.on_click(lambda _button: self.add_row({}))
-        return widgets.VBox([widgets.HTML(f"<b>{title}</b>"), self.rows_box, add_button])
+        header = self._header_row()
+        return widgets.VBox(
+            [widgets.HTML(f"<b>{title}</b>"), header, self.rows_box, add_button],
+            layout=widgets.Layout(margin="10px 0 12px 0"),
+        )
+
+    def _header_row(self):
+        widgets = self.widgets
+        cells = [widgets.Label("", layout=widgets.Layout(width="34px"))]
+        for column in self.field.get("columns", []):
+            cells.append(widgets.HTML(self._column_header(column), layout=widgets.Layout(width="120px")))
+        cells.append(widgets.Label("", layout=widgets.Layout(width="86px")))
+        return widgets.HBox(cells, layout=widgets.Layout(gap="8px"))
 
     def add_row(self, values):
         widgets = self.widgets
         controls = {}
-        row_children = []
         for column in self.field.get("columns", []):
             default = values.get(column["name"], column.get("default", 0.0))
             control = self._make_column_widget(column, default)
             controls[column["name"]] = control
-            label = self._column_label(column)
-            row_children.append(widgets.VBox([widgets.Label(label), control]))
 
-        remove_button = widgets.Button(description="Ta bort")
+        remove_button = widgets.Button(description="Ta bort", layout=widgets.Layout(width="86px"))
         row = {"controls": controls, "widget": None}
         remove_button.on_click(lambda _button, row=row: self.remove_row(row))
-        row_widget = widgets.HBox(row_children + [remove_button], layout=widgets.Layout(gap="12px"))
+        row["remove_button"] = remove_button
+        row_widget = self._make_row_widget(row)
         row["widget"] = row_widget
         self.rows.append(row)
         self._refresh_rows()
+
+    def _make_row_widget(self, row):
+        widgets = self.widgets
+        row_number = self.rows.index(row) + 1 if row in self.rows else len(self.rows) + 1
+        cells = [widgets.Label(str(row_number), layout=widgets.Layout(width="34px"))]
+        for column in self.field.get("columns", []):
+            cells.append(row["controls"][column["name"]])
+        cells.append(row["remove_button"])
+        return widgets.HBox(cells, layout=widgets.Layout(gap="8px", align_items="center"))
 
     def remove_row(self, row):
         if row in self.rows:
@@ -308,12 +333,19 @@ class _TableInput:
             self._refresh_rows()
 
     def _refresh_rows(self):
+        for row in self.rows:
+            row["widget"] = self._make_row_widget(row)
         self.rows_box.children = [row["widget"] for row in self.rows]
 
     def _column_label(self, column):
         unit = column.get("unit", "")
         label = column.get("label", column["name"])
         return f"{label} [{unit}]" if unit else label
+
+    def _column_header(self, column):
+        symbol = column.get("symbol") or column.get("latex") or column.get("name", "")
+        label = self._column_label(column)
+        return f"<span>{symbol}</span><br><span>{label}</span>"
 
     def _make_column_widget(self, column, default):
         widgets = self.widgets
