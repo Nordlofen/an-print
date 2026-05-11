@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Printing and layout helpers for AN Suite."
 readme = "README.md"
 requires-python = ">=3.13"
+dependencies = ["ipywidgets"]
 
 [build-system]
 requires = ["hatchling"]
