@@ -15,6 +15,19 @@ class _Widget:
         self.description = description
         self.children = list(children or [])
         self.kwargs = kwargs
+        self.layout = kwargs.get("layout", {})
+        self._observers = []
+
+    def observe(self, callback, names=None):
+        self._observers.append((callback, names))
+
+    def set_value(self, value):
+        old = self.value
+        self.value = value
+        change = {"name": "value", "old": old, "new": value, "owner": self}
+        for callback, names in self._observers:
+            if names in (None, "value") or (isinstance(names, (list, tuple, set)) and "value" in names):
+                callback(change)
 
 
 class _Button(_Widget):
@@ -172,6 +185,82 @@ class TestPanel(unittest.TestCase):
         self.assertEqual([name for name, _kwargs in calls], ["MB", "ID", "DR", "EKV", "SR"])
         self.assertEqual(calls[1][1], {"visa": True, "etikett": True, "rader": 15})
         self.assertEqual(calls[3][1], {"visa": False, "etikett": True, "rader": 15})
+
+    def test_scalarfalt_laggs_ut_kolumnvis_i_schemaordning(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a", "b", "c", "d", "e"],
+            "fields": [
+                {"name": "a", "type": "float", "label": "A", "default": 1.0},
+                {"name": "b", "type": "float", "label": "B", "default": 2.0},
+                {"name": "c", "type": "float", "label": "C", "default": 3.0},
+                {"name": "d", "type": "float", "label": "D", "default": 4.0},
+                {"name": "e", "type": "float", "label": "E", "default": 5.0},
+            ],
+        }
+
+        panel = Panel(funktion)
+        field_rows = panel.widget.children[1].children[0].children
+        row_labels = []
+        for row in field_rows:
+            row_labels.append([field_row.children[0].value for field_row in row.children])
+
+        self.assertEqual(row_labels, [["A", "D"], ["B", "E"], ["C"]])
+        self.assertEqual(panel.to_px(), [1.0, 2.0, 3.0, 4.0, 5.0])
+
+    def test_visible_if_styr_faltrad(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["direkt", "last", "M_Ed"],
+            "fields": [
+                {"name": "direkt", "type": "bool", "label": "Direkt", "default": False},
+                {"name": "last", "type": "float", "label": "Last", "default": 1.0, "visible_if": {"field": "direkt", "equals": False}},
+                {"name": "M_Ed", "type": "float", "label": "Moment", "default": 2.0, "visible_if": {"field": "direkt", "equals": True}},
+            ],
+        }
+
+        panel = Panel(funktion)
+
+        self.assertEqual(panel._field_widgets["direkt"].kwargs.get("indent"), False)
+        self.assertEqual(panel._field_widgets["direkt"].layout.get("width"), "180px")
+        field_rows = panel.widget.children[1].children[0].children
+        row_labels = [[field_row.children[0].value for field_row in row.children] for row in field_rows]
+        self.assertEqual(row_labels, [["Direkt", "Last"]])
+
+        panel._field_widgets["direkt"].set_value(True)
+
+        field_rows = panel.widget.children[1].children[0].children
+        row_labels = [[field_row.children[0].value for field_row in row.children] for row in field_rows]
+        self.assertEqual(row_labels, [["Direkt", "Moment"]])
+
+    def test_tom_symbol_visar_inte_faltnamn(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["flag"],
+            "fields": [
+                {"name": "flag", "type": "bool", "label": "Flagga", "symbol": "", "default": True},
+            ],
+        }
+
+        panel = Panel(funktion)
+        field_row = panel.widget.children[1].children[0].children[0].children[0]
+
+        self.assertEqual(field_row.children[1].value, "<span></span>")
 
     def test_funktion_utan_schema_ger_tydligt_fel(self):
         from an_print import Panel

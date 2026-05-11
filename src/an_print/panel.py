@@ -35,13 +35,14 @@ class Panel:
 
         self._widgets = self._load_widgets()
         self._field_widgets = {}
+        self._field_rows = {}
+        self._scalar_field_groups = []
         self._table_widgets = {}
         self._block_widgets = {}
         self._style = {"description_width": "0px"}
         self._input_layout = self._widgets.Layout(width="180px")
         self._label_layout = self._widgets.Layout(width="255px")
         self._symbol_layout = self._widgets.Layout(width="50px")
-        self._field_row_layout = self._widgets.Layout(width="535px", align_items="center")
         self.widget = self._build_widget()
 
     def _load_widgets(self):
@@ -82,30 +83,43 @@ class Panel:
     def _build_fields_box(self):
         widgets = self._widgets
         rows = []
-        scalar_rows = []
+        scalar_fields = []
         for field in self.schema.get("fields", []):
             if field.get("type") == "table":
-                if scalar_rows:
-                    rows.extend(self._two_column_rows(scalar_rows))
-                    scalar_rows = []
+                if scalar_fields:
+                    self._add_scalar_field_group(rows, scalar_fields)
+                    scalar_fields = []
                 table = _TableInput(widgets, field)
                 self._table_widgets[field["name"]] = table
                 rows.append(table.widget)
             else:
                 control = self._make_field_widget(field)
                 self._field_widgets[field["name"]] = control
-                scalar_rows.append(self._field_row(field, control))
-        if scalar_rows:
-            rows.extend(self._two_column_rows(scalar_rows))
-        return widgets.VBox(rows)
+                field_row = self._field_row(field, control)
+                self._field_rows[field["name"]] = field_row
+                scalar_fields.append(field)
+        if scalar_fields:
+            self._add_scalar_field_group(rows, scalar_fields)
+        fields_box = widgets.VBox(rows)
+        self._setup_visibility_rules()
+        self._refresh_field_groups()
+        return fields_box
+
+    def _add_scalar_field_group(self, rows, fields):
+        group_box = self._widgets.VBox([])
+        self._scalar_field_groups.append({"box": group_box, "fields": list(fields)})
+        rows.append(group_box)
 
     def _two_column_rows(self, field_rows):
         widgets = self._widgets
         rows = []
-        for index in range(0, len(field_rows), 2):
-            children = [field_rows[index]]
-            if index + 1 < len(field_rows):
-                children.append(field_rows[index + 1])
+        split_index = (len(field_rows) + 1) // 2
+        left_rows = field_rows[:split_index]
+        right_rows = field_rows[split_index:]
+        for index, left_row in enumerate(left_rows):
+            children = [left_row]
+            if index < len(right_rows):
+                children.append(right_rows[index])
             rows.append(widgets.HBox(children, layout=widgets.Layout(gap="28px")))
         return rows
 
@@ -113,7 +127,49 @@ class Panel:
         widgets = self._widgets
         label = widgets.Label(self._field_label(field), layout=self._label_layout)
         symbol = widgets.HTML(self._field_symbol(field), layout=self._symbol_layout)
-        return widgets.HBox([label, symbol, control], layout=self._field_row_layout)
+        row_layout = widgets.Layout(width="535px", align_items="center")
+        return widgets.HBox([label, symbol, control], layout=row_layout)
+
+    def _setup_visibility_rules(self):
+        for field in self.schema.get("fields", []):
+            visible_if = field.get("visible_if")
+            if not visible_if:
+                continue
+            controller_name = visible_if.get("field")
+            controller = self._field_widgets.get(controller_name)
+            if controller is None:
+                continue
+            if hasattr(controller, "observe"):
+                controller.observe(lambda _change: self._refresh_field_groups(), names="value")
+
+    def _refresh_field_groups(self):
+        for group in self._scalar_field_groups:
+            visible_rows = [
+                self._field_rows[field["name"]]
+                for field in group["fields"]
+                if self._field_is_visible(field)
+            ]
+            group["box"].children = self._two_column_rows(visible_rows)
+
+    def _field_is_visible(self, field):
+        visible_if = field.get("visible_if")
+        if not visible_if:
+            return True
+        controller = self._field_widgets.get(visible_if.get("field"))
+        if controller is None:
+            return True
+        return self._visible_if_matches(controller.value, visible_if)
+
+    def _visible_if_matches(self, value, visible_if):
+        if "equals" in visible_if:
+            return value == visible_if["equals"]
+        if "not_equals" in visible_if:
+            return value != visible_if["not_equals"]
+        if "in" in visible_if:
+            return value in visible_if["in"]
+        if "not_in" in visible_if:
+            return value not in visible_if["not_in"]
+        return True
 
     def _build_blocks_box(self):
         widgets = self._widgets
@@ -176,7 +232,10 @@ class Panel:
         return f"{label} [{unit}]" if unit else label
 
     def _field_symbol(self, field):
-        symbol = field.get("symbol") or field.get("latex") or field.get("name", "")
+        if "symbol" in field:
+            symbol = field["symbol"]
+        else:
+            symbol = field.get("latex") or field.get("name", "")
         return f"<span>{symbol}</span>"
 
     def _make_field_widget(self, field):
@@ -199,7 +258,12 @@ class Panel:
                 style=self._style,
             )
         if field_type == "bool":
-            return widgets.Checkbox(value=bool(default), description="")
+            return widgets.Checkbox(
+                value=bool(default),
+                description="",
+                indent=False,
+                layout=self._input_layout,
+            )
         if field_type == "choice":
             options = [(option["label"], option["value"]) for option in field.get("options", [])]
             return widgets.Dropdown(
