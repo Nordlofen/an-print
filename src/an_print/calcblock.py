@@ -132,6 +132,36 @@ class CalcBlock:
             return f"{value:.{decimals}f}"
         return str(value)
 
+    def _fmt_sigfigs(self, value, sigfigs=3):
+        """
+        Formaterar ett numeriskt värde med valt antal signifikanta siffror.
+
+        Parametrar:
+            value : float | int
+                Värde som ska formateras.
+
+            sigfigs : int, optional
+                Antal signifikanta siffror i utskriften.
+
+        Returvärde:
+            str
+                Formaterat värde som sträng.
+        """
+        import math
+
+        if isinstance(value, bool):
+            return "Ja" if value else "Nej"
+        if not isinstance(value, (int, float)):
+            return str(value)
+        if value == 0:
+            return "0"
+
+        abs_value = abs(float(value))
+        decimals = sigfigs - int(math.floor(math.log10(abs_value))) - 1
+        if decimals > 0:
+            return f"{value:.{decimals}f}"
+        return f"{value:.0f}"
+
     def _format_text_value(self, value):
         """
         Formaterar textuella värden för visning i textläge.
@@ -193,6 +223,27 @@ class CalcBlock:
         if decimals_override and namn in decimals_override:
             return decimals_override[namn]
         return self._decimals_for_item(item)
+
+    def _sigfigs_for_item(self, item):
+        """
+        Hämtar eventuell signifikant-sifferstyrning för en datapost.
+
+        Parametrar:
+            item : dict
+                Datapost med metadata för presentation.
+
+        Returvärde:
+            int | None
+                Antal signifikanta siffror, eller None om fast decimalformat ska
+                användas.
+        """
+        if item.get("sigfigs") is not None:
+            return item["sigfigs"]
+
+        if item.get("unit") in {"MPa", "kN"}:
+            return 3
+
+        return None
 
     def _decimals_for_item(self, item):
         """
@@ -354,9 +405,12 @@ class CalcBlock:
             return formatted
 
         decimals = self._get_item_decimals(item, decimals_override=decimals_override)
+        sigfigs = None if decimals_override else self._sigfigs_for_item(item)
 
         if item.get("unit") == "mm^4":
             formatted = self._format_scientific(value, decimals=decimals)
+        elif sigfigs is not None:
+            formatted = self._fmt_sigfigs(value, sigfigs=sigfigs)
         else:
             formatted = self._fmt(value, decimals)
         unit = item.get("unit", "")
@@ -388,8 +442,11 @@ class CalcBlock:
             formatted = self._escape_html(text)
         else:
             decimals = self._get_item_decimals(item, decimals_override=decimals_override)
+            sigfigs = None if decimals_override else self._sigfigs_for_item(item)
             if item.get("unit") == "mm^4":
                 formatted = self._format_scientific_html(value, decimals=decimals)
+            elif sigfigs is not None:
+                formatted = self._escape_html(self._fmt_sigfigs(value, sigfigs=sigfigs))
             else:
                 formatted = self._escape_html(self._fmt(value, decimals))
 
