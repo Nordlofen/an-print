@@ -1,5 +1,8 @@
+import os
 import pathlib
+import re
 import sys
+import tempfile
 import types
 import unittest
 
@@ -90,12 +93,26 @@ class TestPanel(unittest.TestCase):
     def setUp(self):
         self._old_ipywidgets = sys.modules.get("ipywidgets")
         sys.modules["ipywidgets"] = FakeWidgets()
+        self._old_cwd = os.getcwd()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        os.chdir(self._tmpdir.name)
+        from an_print import Panel
+
+        Panel._LAST_VALUES.clear()
 
     def tearDown(self):
+        from an_print import Panel
+
+        Panel._LAST_VALUES.clear()
+        os.chdir(self._old_cwd)
+        self._tmpdir.cleanup()
         if self._old_ipywidgets is None:
             sys.modules.pop("ipywidgets", None)
         else:
             sys.modules["ipywidgets"] = self._old_ipywidgets
+
+    def _label_text(self, field_row):
+        return re.sub("<[^>]+>", "", field_row.children[0].value)
 
     def test_bygger_px_for_allmanna_barighetsekvationen(self):
         from an_calcs.geo import allmanna_barighetsekvationen
@@ -208,10 +225,13 @@ class TestPanel(unittest.TestCase):
         field_rows = panel.widget.children[1].children[0].children
         row_labels = []
         for row in field_rows:
-            row_labels.append([field_row.children[0].value for field_row in row.children])
+            row_labels.append([self._label_text(field_row) for field_row in row.children])
 
         self.assertEqual(row_labels, [["A", "D"], ["B", "E"], ["C"]])
         self.assertEqual(panel.to_px(), [1.0, 2.0, 3.0, 4.0, 5.0])
+        first_label = field_rows[0].children[0].children[0]
+        self.assertIn("white-space: normal", first_label.value)
+        self.assertEqual(first_label.layout.get("width"), "325px")
 
     def test_visible_if_styr_faltrad(self):
         from an_print import Panel
@@ -232,15 +252,15 @@ class TestPanel(unittest.TestCase):
         panel = Panel(funktion)
 
         self.assertEqual(panel._field_widgets["direkt"].kwargs.get("indent"), False)
-        self.assertEqual(panel._field_widgets["direkt"].layout.get("width"), "180px")
+        self.assertEqual(panel._field_widgets["direkt"].layout.get("width"), "70px")
         field_rows = panel.widget.children[1].children[0].children
-        row_labels = [[field_row.children[0].value for field_row in row.children] for row in field_rows]
+        row_labels = [[self._label_text(field_row) for field_row in row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Last"]])
 
         panel._field_widgets["direkt"].set_value(True)
 
         field_rows = panel.widget.children[1].children[0].children
-        row_labels = [[field_row.children[0].value for field_row in row.children] for row in field_rows]
+        row_labels = [[self._label_text(field_row) for field_row in row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Moment"]])
 
     def test_tom_symbol_visar_inte_faltnamn(self):
@@ -260,7 +280,7 @@ class TestPanel(unittest.TestCase):
         panel = Panel(funktion)
         field_row = panel.widget.children[1].children[0].children[0].children[0]
 
-        self.assertEqual(field_row.children[1].value, "<span></span>")
+        self.assertEqual(field_row.children[1].value, "<span style='display: inline-block; padding-left: 8px;'></span>")
 
     def test_funktion_utan_schema_ger_tydligt_fel(self):
         from an_print import Panel
@@ -326,6 +346,54 @@ class TestPanel(unittest.TestCase):
 
         self.assertEqual(panel2._field_widgets["a"].value, 9.0)
         self.assertEqual(panel3._field_widgets["a"].value, 2.0)
+
+    def test_faltandring_sparas_till_disk_utan_berakning(self):
+        from an_print import Panel
+
+        Panel._LAST_VALUES.clear()
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel = Panel(funktion)
+        panel._field_widgets["a"].set_value(11.0)
+        Panel._LAST_VALUES.clear()
+
+        panel2 = Panel(funktion)
+
+        self.assertEqual(panel2._field_widgets["a"].value, 11.0)
+
+    def test_redovisningsinstallningar_sparas_till_disk(self):
+        from an_print import Panel
+
+        Panel._LAST_VALUES.clear()
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel = Panel(funktion)
+        panel._block_widgets["DR"]["rader"].set_value(12)
+        panel._block_widgets["EKV"]["visa"].set_value(True)
+        panel._block_widgets["SR"]["etikett"].set_value(False)
+        Panel._LAST_VALUES.clear()
+
+        panel2 = Panel(funktion)
+
+        self.assertEqual(panel2._block_widgets["DR"]["rader"].value, 12)
+        self.assertEqual(panel2._block_widgets["EKV"]["visa"].value, True)
+        self.assertEqual(panel2._block_widgets["SR"]["etikett"].value, False)
 
     def test_ny_panel_arver_senaste_tabellrader(self):
         import an_print.calcblock as calcblock_module

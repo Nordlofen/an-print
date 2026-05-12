@@ -1,3 +1,8 @@
+import html
+import json
+from pathlib import Path
+
+
 class Panel:
     """
     Notebookpanel for berakningsfunktioner med ett ``panel_schema``.
@@ -21,8 +26,9 @@ class Panel:
         "SR": "SR - Slutresultat",
     }
     _LAST_VALUES = {}
+    STATE_FILENAME = ".an_print_panel_state.json"
 
-    def __init__(self, funktion, use_last=True):
+    def __init__(self, funktion, use_last=True, persist=True):
         schema = getattr(funktion, "panel_schema", None)
         if schema is None:
             namn = getattr(funktion, "__name__", repr(funktion))
@@ -31,11 +37,12 @@ class Panel:
         self.funktion = funktion
         self.schema = schema
         self.use_last = use_last
+        self.persist = persist
         self.px = None
         self.details = None
         self.cb = None
         self._last_key = self._make_last_key(funktion)
-        self._initial_values = self._LAST_VALUES.get(self._last_key, {}) if use_last else {}
+        self._initial_values = self._load_initial_values() if use_last else {}
 
         self._widgets = self._load_widgets()
         self._field_widgets = {}
@@ -44,15 +51,44 @@ class Panel:
         self._table_widgets = {}
         self._block_widgets = {}
         self._style = {"description_width": "0px"}
-        self._input_layout = self._widgets.Layout(width="180px")
-        self._label_layout = self._widgets.Layout(width="255px")
-        self._symbol_layout = self._widgets.Layout(width="50px")
+        self._input_layout = self._widgets.Layout(width="70px")
+        self._label_layout = self._widgets.Layout(width="325px")
+        self._symbol_layout = self._widgets.Layout(width="80px")
         self.widget = self._build_widget()
+        self._attach_autosave_observers()
 
     def _make_last_key(self, funktion):
         module = getattr(funktion, "__module__", "")
         name = getattr(funktion, "__name__", repr(funktion))
         return f"{module}.{name}"
+
+    def _state_path(self):
+        return Path.cwd() / self.STATE_FILENAME
+
+    def _load_initial_values(self):
+        values = {}
+        if self.persist:
+            values.update(self._read_persisted_values().get(self._last_key, {}))
+        values.update(self._LAST_VALUES.get(self._last_key, {}))
+        return values
+
+    def _read_persisted_values(self):
+        path = self._state_path()
+        if not path.exists():
+            return {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _write_persisted_values(self):
+        if not self.persist:
+            return
+        state = self._read_persisted_values()
+        state[self._last_key] = self._LAST_VALUES.get(self._last_key, {})
+        self._state_path().write_text(
+            json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     def _load_widgets(self):
         try:
@@ -98,7 +134,12 @@ class Panel:
                 if scalar_fields:
                     self._add_scalar_field_group(rows, scalar_fields)
                     scalar_fields = []
-                table = _TableInput(widgets, field, self._initial_values.get(field["name"]))
+                table = _TableInput(
+                    widgets,
+                    field,
+                    self._initial_values.get(field["name"]),
+                    on_change=self._save_last_values,
+                )
                 self._table_widgets[field["name"]] = table
                 rows.append(table.widget)
             else:
@@ -134,9 +175,9 @@ class Panel:
 
     def _field_row(self, field, control):
         widgets = self._widgets
-        label = widgets.Label(self._field_label(field), layout=self._label_layout)
+        label = widgets.HTML(self._field_label_html(field), layout=self._label_layout)
         symbol = widgets.HTML(self._field_symbol(field), layout=self._symbol_layout)
-        row_layout = widgets.Layout(width="535px", align_items="center")
+        row_layout = widgets.Layout(width="500px", align_items="center")
         return widgets.HBox([label, symbol, control], layout=row_layout)
 
     def _setup_visibility_rules(self):
@@ -184,9 +225,11 @@ class Panel:
         widgets = self._widgets
         rows = [widgets.HTML("<b>Redovisning</b>")]
         block_defaults = self.schema.get("blocks", {})
+        saved_blocks = self._initial_values.get("__blocks__", {})
         for name in ("MB", "ID", "DR", "EKV", "SR"):
             defaults = dict(self.DEFAULT_BLOCKS[name])
             defaults.update(block_defaults.get(name, {}))
+            defaults.update(saved_blocks.get(name, {}))
 
             visa = widgets.Checkbox(
                 value=bool(defaults.get("visa", False)),
@@ -240,12 +283,20 @@ class Panel:
         label = field.get("label", field["name"])
         return f"{label} [{unit}]" if unit else label
 
+    def _field_label_html(self, field):
+        label = html.escape(self._field_label(field))
+        return (
+            "<div style='white-space: normal; overflow: visible; "
+            "line-height: 1.25; padding-right: 8px;'>"
+            f"{label}</div>"
+        )
+
     def _field_symbol(self, field):
         if "symbol" in field:
             symbol = field["symbol"]
         else:
             symbol = field.get("latex") or field.get("name", "")
-        return f"<span>{symbol}</span>"
+        return f"<span style='display: inline-block; padding-left: 8px;'>{symbol}</span>"
 
     def _make_field_widget(self, field):
         widgets = self._widgets
@@ -291,6 +342,16 @@ class Panel:
             )
         raise ValueError(f"Okänd fälttyp: {field_type!r}.")
 
+    def _attach_autosave_observers(self):
+        for widget in self._field_widgets.values():
+            if hasattr(widget, "observe"):
+                widget.observe(lambda _change: self._save_last_values(), names="value")
+        for block in self._block_widgets.values():
+            for widget in block.values():
+                if hasattr(widget, "observe"):
+                    widget.observe(lambda _change: self._save_last_values(), names="value")
+        self._save_last_values()
+
     def _on_calculate_clicked(self, _button):
         self._output.clear_output()
         with self._output:
@@ -334,7 +395,19 @@ class Panel:
             values[name] = widget.value
         for name, table in self._table_widgets.items():
             values[name] = table.rows_as_values()
+        values["__blocks__"] = self._block_values()
         self._LAST_VALUES[self._last_key] = values
+        self._write_persisted_values()
+
+    def _block_values(self):
+        values = {}
+        for name, block in self._block_widgets.items():
+            block_values = {"visa": bool(block["visa"].value)}
+            if name != "MB":
+                block_values["etikett"] = bool(block["etikett"].value)
+                block_values["rader"] = int(block["rader"].value)
+            values[name] = block_values
+        return values
 
     def _render_blocks(self):
         for name in ("MB", "ID", "DR", "EKV", "SR"):
@@ -352,9 +425,10 @@ class Panel:
 
 
 class _TableInput:
-    def __init__(self, widgets, field, initial_rows=None):
+    def __init__(self, widgets, field, initial_rows=None, on_change=None):
         self.widgets = widgets
         self.field = field
+        self.on_change = on_change
         self._input_layout = widgets.Layout(width="120px")
         self._style = {"description_width": "0px"}
         self.rows_box = widgets.VBox([])
@@ -389,6 +463,8 @@ class _TableInput:
         for column in self.field.get("columns", []):
             default = values.get(column["name"], column.get("default", 0.0))
             control = self._make_column_widget(column, default)
+            if hasattr(control, "observe"):
+                control.observe(lambda _change: self._notify_change(), names="value")
             controls[column["name"]] = control
 
         remove_button = widgets.Button(description="Ta bort", layout=widgets.Layout(width="86px"))
@@ -399,6 +475,7 @@ class _TableInput:
         row["widget"] = row_widget
         self.rows.append(row)
         self._refresh_rows()
+        self._notify_change()
 
     def _make_row_widget(self, row):
         widgets = self.widgets
@@ -413,6 +490,11 @@ class _TableInput:
         if row in self.rows:
             self.rows.remove(row)
             self._refresh_rows()
+            self._notify_change()
+
+    def _notify_change(self):
+        if self.on_change is not None:
+            self.on_change()
 
     def _refresh_rows(self):
         for row in self.rows:

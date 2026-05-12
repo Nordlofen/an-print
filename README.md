@@ -44,6 +44,17 @@ panel = Panel(allmanna_barighetsekvationen)
 panel
 ```
 
+`Panel` sparar faltandringar automatiskt per berakningsfunktion. Senaste
+varden ateranvands i nya paneler och skrivs aven till
+`.an_print_panel_state.json` i aktuell arbetsmapp, sa de finns kvar efter
+restart av kernel nar cellen kors igen.
+
+```python
+panel = Panel(allmanna_barighetsekvationen)                  # anvand senaste varden
+panel = Panel(allmanna_barighetsekvationen, use_last=False)  # tvinga schema-defaults
+panel = Panel(allmanna_barighetsekvationen, persist=False)   # spara inte till disk
+```
+
 Vid knapptryck:
 
 ```python

@@ -11,6 +11,7 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 TestaRepos.ipynb
+.an_print_panel_state.json
 
 # Build artifacts
 build/
