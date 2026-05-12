@@ -20,8 +20,9 @@ class Panel:
         "EKV": "EKV - Ekvationer",
         "SR": "SR - Slutresultat",
     }
+    _LAST_VALUES = {}
 
-    def __init__(self, funktion):
+    def __init__(self, funktion, use_last=True):
         schema = getattr(funktion, "panel_schema", None)
         if schema is None:
             namn = getattr(funktion, "__name__", repr(funktion))
@@ -29,9 +30,12 @@ class Panel:
 
         self.funktion = funktion
         self.schema = schema
+        self.use_last = use_last
         self.px = None
         self.details = None
         self.cb = None
+        self._last_key = self._make_last_key(funktion)
+        self._initial_values = self._LAST_VALUES.get(self._last_key, {}) if use_last else {}
 
         self._widgets = self._load_widgets()
         self._field_widgets = {}
@@ -44,6 +48,11 @@ class Panel:
         self._label_layout = self._widgets.Layout(width="255px")
         self._symbol_layout = self._widgets.Layout(width="50px")
         self.widget = self._build_widget()
+
+    def _make_last_key(self, funktion):
+        module = getattr(funktion, "__module__", "")
+        name = getattr(funktion, "__name__", repr(funktion))
+        return f"{module}.{name}"
 
     def _load_widgets(self):
         try:
@@ -89,7 +98,7 @@ class Panel:
                 if scalar_fields:
                     self._add_scalar_field_group(rows, scalar_fields)
                     scalar_fields = []
-                table = _TableInput(widgets, field)
+                table = _TableInput(widgets, field, self._initial_values.get(field["name"]))
                 self._table_widgets[field["name"]] = table
                 rows.append(table.widget)
             else:
@@ -241,7 +250,7 @@ class Panel:
     def _make_field_widget(self, field):
         widgets = self._widgets
         field_type = field.get("type", "float")
-        default = field.get("default")
+        default = self._initial_values.get(field["name"], field.get("default"))
         description = ""
         if field_type == "float":
             return widgets.FloatText(
@@ -315,8 +324,17 @@ class Panel:
         self.px = self.to_px()
         self.details = self.funktion(self.px)
         self.cb = CalcBlock(self.details)
+        self._save_last_values()
         self._render_blocks()
         return self.details
+
+    def _save_last_values(self):
+        values = {}
+        for name, widget in self._field_widgets.items():
+            values[name] = widget.value
+        for name, table in self._table_widgets.items():
+            values[name] = table.rows_as_values()
+        self._LAST_VALUES[self._last_key] = values
 
     def _render_blocks(self):
         for name in ("MB", "ID", "DR", "EKV", "SR"):
@@ -334,7 +352,7 @@ class Panel:
 
 
 class _TableInput:
-    def __init__(self, widgets, field):
+    def __init__(self, widgets, field, initial_rows=None):
         self.widgets = widgets
         self.field = field
         self._input_layout = widgets.Layout(width="120px")
@@ -342,7 +360,7 @@ class _TableInput:
         self.rows_box = widgets.VBox([])
         self.rows = []
         self.widget = self._build_widget()
-        defaults = field.get("default_rows") or [{}]
+        defaults = initial_rows or field.get("default_rows") or [{}]
         for row in defaults:
             self.add_row(row)
 
@@ -459,3 +477,12 @@ class _TableInput:
                 if output in result:
                     result[output].append(row["controls"][column["name"]].value)
         return result
+
+    def rows_as_values(self):
+        values = []
+        for row in self.rows:
+            row_values = {}
+            for column in self.field.get("columns", []):
+                row_values[column["name"]] = row["controls"][column["name"]].value
+            values.append(row_values)
+        return values

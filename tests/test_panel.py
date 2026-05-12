@@ -271,6 +271,103 @@ class TestPanel(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "saknar panel_schema"):
             Panel(funktion)
 
+    def test_ny_panel_arver_senaste_varden_for_samma_funktion(self):
+        import an_print.calcblock as calcblock_module
+        from an_print import Panel
+
+        Panel._LAST_VALUES.clear()
+
+        def funktion(px):
+            return {
+                "metodbeskrivning": {"title": "MB", "items": []},
+                "indata": {"title": "ID", "items": []},
+                "delresultat": {"title": "DR", "items": []},
+                "slutresultat": {"title": "SR", "items": []},
+                "ekvationer": {"title": "EKV", "items": []},
+            }
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        class FakeCalcBlock:
+            def __init__(self, details):
+                self.details = details
+
+            def MB(self, **kwargs):
+                pass
+
+            def ID(self, **kwargs):
+                pass
+
+            def DR(self, **kwargs):
+                pass
+
+            def EKV(self, **kwargs):
+                pass
+
+            def SR(self, **kwargs):
+                pass
+
+        original = calcblock_module.CalcBlock
+        calcblock_module.CalcBlock = FakeCalcBlock
+        try:
+            panel = Panel(funktion)
+            panel._field_widgets["a"].value = 9.0
+            panel.calculate()
+
+            panel2 = Panel(funktion)
+            panel3 = Panel(funktion, use_last=False)
+        finally:
+            calcblock_module.CalcBlock = original
+            Panel._LAST_VALUES.clear()
+
+        self.assertEqual(panel2._field_widgets["a"].value, 9.0)
+        self.assertEqual(panel3._field_widgets["a"].value, 2.0)
+
+    def test_ny_panel_arver_senaste_tabellrader(self):
+        import an_print.calcblock as calcblock_module
+        from an_calcs.geo import sattning
+        from an_print import Panel
+
+        Panel._LAST_VALUES.clear()
+
+        class FakeCalcBlock:
+            def __init__(self, details):
+                self.details = details
+
+            def MB(self, **kwargs):
+                pass
+
+            def ID(self, **kwargs):
+                pass
+
+            def DR(self, **kwargs):
+                pass
+
+            def EKV(self, **kwargs):
+                pass
+
+            def SR(self, **kwargs):
+                pass
+
+        original = calcblock_module.CalcBlock
+        calcblock_module.CalcBlock = FakeCalcBlock
+        try:
+            panel = Panel(sattning)
+            table = panel._table_widgets["jordlager"]
+            table.rows[0]["controls"]["dz"].value = 2.5
+            panel.calculate()
+
+            panel2 = Panel(sattning)
+        finally:
+            calcblock_module.CalcBlock = original
+            Panel._LAST_VALUES.clear()
+
+        self.assertEqual(panel2._table_widgets["jordlager"].rows[0]["controls"]["dz"].value, 2.5)
+
 
 if __name__ == "__main__":
     unittest.main()
