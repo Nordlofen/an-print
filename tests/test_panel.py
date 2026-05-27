@@ -232,7 +232,7 @@ class TestPanel(unittest.TestCase):
         first_label = field_rows[0].children[0].children[0]
         self.assertIn("white-space: normal", first_label.value)
         self.assertEqual(first_label.layout.get("width"), "210px")
-        self.assertEqual(field_rows[0].layout.get("gap"), "40px")
+        self.assertEqual(field_rows[0].layout.get("gap"), "80px")
         self.assertEqual(field_rows[0].children[0].layout.get("width"), "380px")
         self.assertEqual(field_rows[0].children[0].children[1].layout.get("width"), "70px")
 
