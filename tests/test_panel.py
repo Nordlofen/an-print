@@ -231,7 +231,10 @@ class TestPanel(unittest.TestCase):
         self.assertEqual(panel.to_px(), [1.0, 2.0, 3.0, 4.0, 5.0])
         first_label = field_rows[0].children[0].children[0]
         self.assertIn("white-space: normal", first_label.value)
-        self.assertEqual(first_label.layout.get("width"), "325px")
+        self.assertEqual(first_label.layout.get("width"), "210px")
+        self.assertEqual(field_rows[0].layout.get("gap"), "12px")
+        self.assertEqual(field_rows[0].children[0].layout.get("width"), "380px")
+        self.assertEqual(field_rows[0].children[0].children[1].layout.get("width"), "70px")
 
     def test_visible_if_styr_faltrad(self):
         from an_print import Panel

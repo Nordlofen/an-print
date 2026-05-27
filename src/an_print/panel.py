@@ -52,8 +52,8 @@ class Panel:
         self._block_widgets = {}
         self._style = {"description_width": "0px"}
         self._input_layout = self._widgets.Layout(width="70px")
-        self._label_layout = self._widgets.Layout(width="325px")
-        self._symbol_layout = self._widgets.Layout(width="80px")
+        self._label_layout = self._widgets.Layout(width="210px")
+        self._symbol_layout = self._widgets.Layout(width="70px")
         self.widget = self._build_widget()
         self._attach_autosave_observers()
 
@@ -170,14 +170,14 @@ class Panel:
             children = [left_row]
             if index < len(right_rows):
                 children.append(right_rows[index])
-            rows.append(widgets.HBox(children, layout=widgets.Layout(gap="28px")))
+            rows.append(widgets.HBox(children, layout=widgets.Layout(gap="12px")))
         return rows
 
     def _field_row(self, field, control):
         widgets = self._widgets
         label = widgets.HTML(self._field_label_html(field), layout=self._label_layout)
         symbol = widgets.HTML(self._field_symbol(field), layout=self._symbol_layout)
-        row_layout = widgets.Layout(width="500px", align_items="center")
+        row_layout = widgets.Layout(width="380px", align_items="center")
         return widgets.HBox([label, symbol, control], layout=row_layout)
 
     def _setup_visibility_rules(self):
