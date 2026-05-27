@@ -225,14 +225,14 @@ class TestPanel(unittest.TestCase):
         field_rows = panel.widget.children[1].children[0].children
         row_labels = []
         for row in field_rows:
-            row_labels.append([self._label_text(field_row) for field_row in row.children])
+            row_labels.append([self._label_text(field_row) for field_row in row.children if field_row.children])
 
         self.assertEqual(row_labels, [["A", "D"], ["B", "E"], ["C"]])
         self.assertEqual(panel.to_px(), [1.0, 2.0, 3.0, 4.0, 5.0])
         first_label = field_rows[0].children[0].children[0]
         self.assertIn("white-space: normal", first_label.value)
         self.assertEqual(first_label.layout.get("width"), "210px")
-        self.assertEqual(field_rows[0].layout.get("gap"), "80px")
+        self.assertEqual(field_rows[0].children[1].layout.get("width"), "80px")
         self.assertEqual(field_rows[0].children[0].layout.get("width"), "380px")
         self.assertEqual(field_rows[0].children[0].children[1].layout.get("width"), "70px")
 
@@ -257,13 +257,13 @@ class TestPanel(unittest.TestCase):
         self.assertEqual(panel._field_widgets["direkt"].kwargs.get("indent"), False)
         self.assertEqual(panel._field_widgets["direkt"].layout.get("width"), "70px")
         field_rows = panel.widget.children[1].children[0].children
-        row_labels = [[self._label_text(field_row) for field_row in row.children] for row in field_rows]
+        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Last"]])
 
         panel._field_widgets["direkt"].set_value(True)
 
         field_rows = panel.widget.children[1].children[0].children
-        row_labels = [[self._label_text(field_row) for field_row in row.children] for row in field_rows]
+        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Moment"]])
 
     def test_tom_symbol_visar_inte_faltnamn(self):

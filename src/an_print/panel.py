@@ -169,8 +169,9 @@ class Panel:
         for index, left_row in enumerate(left_rows):
             children = [left_row]
             if index < len(right_rows):
+                children.append(widgets.HTML("", layout=widgets.Layout(width="80px")))
                 children.append(right_rows[index])
-            rows.append(widgets.HBox(children, layout=widgets.Layout(gap="80px")))
+            rows.append(widgets.HBox(children))
         return rows
 
     def _field_row(self, field, control):
