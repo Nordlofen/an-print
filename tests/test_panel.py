@@ -99,12 +99,14 @@ class TestPanel(unittest.TestCase):
         from an_print import Panel
 
         Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
         Panel._STATE_FILE = None
 
     def tearDown(self):
         from an_print import Panel
 
         Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
         Panel._STATE_FILE = None
         os.chdir(self._old_cwd)
         self._tmpdir.cleanup()
@@ -347,6 +349,7 @@ class TestPanel(unittest.TestCase):
         finally:
             calcblock_module.CalcBlock = original
             Panel._LAST_VALUES.clear()
+            Panel._LAST_BY_FUNCTION.clear()
 
         self.assertEqual(panel2._field_widgets["a"].value, 9.0)
 
@@ -367,9 +370,71 @@ class TestPanel(unittest.TestCase):
         panel_b = Panel(funktion, key="fall_b")
         panel_b._field_widgets["a"].set_value(20.0)
         Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
 
         self.assertEqual(Panel(funktion, key="fall_a")._field_widgets["a"].value, 10.0)
         self.assertEqual(Panel(funktion, key="fall_b")._field_widgets["a"].value, 20.0)
+
+    def test_ny_key_startar_fran_senaste_panel_for_samma_funktion(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel_a = Panel(funktion, key="fall_a")
+        panel_a._field_widgets["a"].set_value(10.0)
+
+        panel_b = Panel(funktion, key="fall_b")
+
+        self.assertEqual(panel_b._field_widgets["a"].value, 10.0)
+
+    def test_befintlig_key_vinner_over_senaste_panel_for_samma_funktion(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel_a = Panel(funktion, key="fall_a")
+        panel_a._field_widgets["a"].set_value(10.0)
+        panel_b = Panel(funktion, key="fall_b")
+        panel_b._field_widgets["a"].set_value(20.0)
+
+        panel_a_again = Panel(funktion, key="fall_a")
+
+        self.assertEqual(panel_a_again._field_widgets["a"].value, 10.0)
+
+    def test_ny_key_startar_fran_senaste_panel_efter_kernel_restart(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel_a = Panel(funktion, key="fall_a")
+        panel_a._field_widgets["a"].set_value(10.0)
+        Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
+
+        panel_b = Panel(funktion, key="fall_b")
+
+        self.assertEqual(panel_b._field_widgets["a"].value, 10.0)
 
     def test_utan_key_ar_bakatkompatibelt_och_deler_state_per_funktion(self):
         from an_print import Panel
@@ -386,6 +451,7 @@ class TestPanel(unittest.TestCase):
         panel = Panel(funktion)
         panel._field_widgets["a"].set_value(12.0)
         Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
 
         self.assertEqual(Panel(funktion)._field_widgets["a"].value, 12.0)
 
@@ -409,6 +475,7 @@ class TestPanel(unittest.TestCase):
         self.assertFalse((pathlib.Path.cwd() / ".an_print_panel_state.json").exists())
 
         Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
         self.assertEqual(Panel(funktion)._field_widgets["a"].value, 13.0)
 
     def test_state_file_i_panel_gar_fore_global_konfiguration(self):
@@ -431,6 +498,7 @@ class TestPanel(unittest.TestCase):
         self.assertFalse((pathlib.Path.cwd() / "global.panel_state.json").exists())
 
         Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
         self.assertEqual(
             Panel(funktion, state_file="lokal.panel_state.json")._field_widgets["a"].value,
             14.0,
@@ -440,6 +508,7 @@ class TestPanel(unittest.TestCase):
         from an_print import Panel
 
         Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
 
         def funktion(px):
             return px
@@ -522,6 +591,7 @@ class TestPanel(unittest.TestCase):
         finally:
             calcblock_module.CalcBlock = original
             Panel._LAST_VALUES.clear()
+            Panel._LAST_BY_FUNCTION.clear()
 
         self.assertEqual(panel2._table_widgets["jordlager"].rows[0]["controls"]["dz"].value, 2.5)
 

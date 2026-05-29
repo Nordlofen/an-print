@@ -65,6 +65,15 @@ panel = Panel(allmanna_barighetsekvationen, key="fall_1")     # separat state pe
 panel = Panel(allmanna_barighetsekvationen, state_file="annan.json")
 ```
 
+Nar en panel skapas laddas startvarden i denna ordning:
+
+1. sparade varden for exakt samma funktion och `key`
+2. senaste sparade panel for samma funktion i samma state-fil
+3. defaultvarden fran `panel_schema`
+
+Det betyder att ett nytt fall kan borja som kopia av foregaende panel for samma
+funktion, men sparas separat nar den nya panelen har en egen `key`.
+
 Vid knapptryck:
 
 ```python

@@ -28,6 +28,16 @@ class Panel:
     Panel(allmanna_barighetsekvationen, key="krysskran_6x6_barighet")
     ```
 
+    Nar en panel skapas laddas startvarden i denna ordning:
+
+    1. sparade varden for exakt samma funktion och ``key``
+    2. senaste sparade panel for samma funktion i samma state-fil
+    3. defaultvarden fran ``panel_schema``
+
+    Det gor att ett nytt berakningsfall kan starta som kopia av foregaende
+    panel for samma funktion, men far egen state sa fort den nya panelen
+    autosparas.
+
     Senaste faltvarden sparas automatiskt i en JSON-fil. Default ar
     ``.an_print_panel_state.json`` i aktuell arbetsmapp. For en notebook eller
     ett projekt kan en egen state-fil valjas en gang hogst upp:
@@ -70,7 +80,9 @@ class Panel:
         "SR": "SR - Slutresultat",
     }
     _LAST_VALUES = {}
+    _LAST_BY_FUNCTION = {}
     STATE_FILENAME = ".an_print_panel_state.json"
+    STATE_META_KEY = "__an_print_panel_meta__"
     _STATE_FILE = None
 
     def __init__(self, funktion, key=None, state_file=None):
@@ -86,6 +98,7 @@ class Panel:
         self.px = None
         self.details = None
         self.cb = None
+        self._base_key = self._make_base_key(funktion)
         self._last_key = self._make_last_key(funktion, key)
         self._initial_values = self._load_initial_values()
 
@@ -123,10 +136,13 @@ class Panel:
         """
         cls._STATE_FILE = state_file
 
-    def _make_last_key(self, funktion, key=None):
+    def _make_base_key(self, funktion):
         module = getattr(funktion, "__module__", "")
         name = getattr(funktion, "__name__", repr(funktion))
-        base = f"{module}.{name}"
+        return f"{module}.{name}"
+
+    def _make_last_key(self, funktion, key=None):
+        base = self._make_base_key(funktion)
         if key is None:
             return base
         return f"{base}:{key}"
@@ -139,10 +155,24 @@ class Panel:
         return Path.cwd() / path
 
     def _load_initial_values(self):
-        values = {}
-        values.update(self._read_persisted_values().get(self._last_key, {}))
-        values.update(self._LAST_VALUES.get(self._last_key, {}))
+        values = self._load_values_for_key(self._last_key)
+        if not values:
+            fallback_key = self._last_key_for_function()
+            if fallback_key and fallback_key != self._last_key:
+                values = self._load_values_for_key(fallback_key)
         return values
+
+    def _load_values_for_key(self, key):
+        values = {}
+        values.update(self._read_persisted_values().get(key, {}))
+        values.update(self._LAST_VALUES.get(key, {}))
+        return values
+
+    def _last_key_for_function(self):
+        if self._base_key in self._LAST_BY_FUNCTION:
+            return self._LAST_BY_FUNCTION[self._base_key]
+        state = self._read_persisted_values()
+        return state.get(self.STATE_META_KEY, {}).get("last_by_function", {}).get(self._base_key)
 
     def _read_persisted_values(self):
         path = self._state_path()
@@ -156,6 +186,9 @@ class Panel:
     def _write_persisted_values(self):
         state = self._read_persisted_values()
         state[self._last_key] = self._LAST_VALUES.get(self._last_key, {})
+        meta = state.setdefault(self.STATE_META_KEY, {})
+        last_by_function = meta.setdefault("last_by_function", {})
+        last_by_function[self._base_key] = self._last_key
         self._state_path().write_text(
             json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -468,6 +501,7 @@ class Panel:
             values[name] = table.rows_as_values()
         values["__blocks__"] = self._block_values()
         self._LAST_VALUES[self._last_key] = values
+        self._LAST_BY_FUNCTION[self._base_key] = self._last_key
         self._write_persisted_values()
 
     def _block_values(self):
