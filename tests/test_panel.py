@@ -344,13 +344,11 @@ class TestPanel(unittest.TestCase):
             panel.calculate()
 
             panel2 = Panel(funktion)
-            panel3 = Panel(funktion, use_last=False)
         finally:
             calcblock_module.CalcBlock = original
             Panel._LAST_VALUES.clear()
 
         self.assertEqual(panel2._field_widgets["a"].value, 9.0)
-        self.assertEqual(panel3._field_widgets["a"].value, 2.0)
 
     def test_key_separerar_state_for_samma_funktion(self):
         from an_print import Panel

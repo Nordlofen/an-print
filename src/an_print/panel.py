@@ -50,14 +50,6 @@ class Panel:
             Frivillig nyckel for att skilja flera paneler for samma funktion.
             Utan key delar alla paneler for samma funktion sparade varden.
 
-        use_last:
-            Om True fylls panelen med senast sparade varden nar de finns.
-            Om False anvands schema-defaults.
-
-        persist:
-            Om True sparas varden till state-fil. Om False sparas de bara i
-            aktiv Python-session.
-
         state_file:
             Frivillig filvag for just denna panel. Gar fore global
             ``configure_state_file``.
@@ -81,7 +73,7 @@ class Panel:
     STATE_FILENAME = ".an_print_panel_state.json"
     _STATE_FILE = None
 
-    def __init__(self, funktion, key=None, use_last=True, persist=True, state_file=None):
+    def __init__(self, funktion, key=None, state_file=None):
         schema = getattr(funktion, "panel_schema", None)
         if schema is None:
             namn = getattr(funktion, "__name__", repr(funktion))
@@ -90,14 +82,12 @@ class Panel:
         self.funktion = funktion
         self.schema = schema
         self.key = key
-        self.use_last = use_last
-        self.persist = persist
         self.state_file = state_file
         self.px = None
         self.details = None
         self.cb = None
         self._last_key = self._make_last_key(funktion, key)
-        self._initial_values = self._load_initial_values() if use_last else {}
+        self._initial_values = self._load_initial_values()
 
         self._widgets = self._load_widgets()
         self._field_widgets = {}
@@ -150,8 +140,7 @@ class Panel:
 
     def _load_initial_values(self):
         values = {}
-        if self.persist:
-            values.update(self._read_persisted_values().get(self._last_key, {}))
+        values.update(self._read_persisted_values().get(self._last_key, {}))
         values.update(self._LAST_VALUES.get(self._last_key, {}))
         return values
 
@@ -165,8 +154,6 @@ class Panel:
             return {}
 
     def _write_persisted_values(self):
-        if not self.persist:
-            return
         state = self._read_persisted_values()
         state[self._last_key] = self._LAST_VALUES.get(self._last_key, {})
         self._state_path().write_text(

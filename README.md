@@ -62,9 +62,7 @@ igen.
 ```python
 panel = Panel(allmanna_barighetsekvationen)                  # anvand senaste varden
 panel = Panel(allmanna_barighetsekvationen, key="fall_1")     # separat state per fall
-panel = Panel(allmanna_barighetsekvationen, use_last=False)  # tvinga schema-defaults
 panel = Panel(allmanna_barighetsekvationen, state_file="annan.json")
-panel = Panel(allmanna_barighetsekvationen, persist=False)   # spara inte till disk
 ```
 
 Vid knapptryck:
