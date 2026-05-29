@@ -44,14 +44,26 @@ panel = Panel(allmanna_barighetsekvationen)
 panel
 ```
 
+Rekommenderat for notebooks med flera paneler ar att valja state-fil hogst upp
+i notebooken:
+
+```python
+from an_print import Panel
+
+Panel.configure_state_file("26022_smalandsvillan.panel_state.json")
+```
+
 `Panel` sparar faltandringar automatiskt per berakningsfunktion. Senaste
 varden ateranvands i nya paneler och skrivs aven till
-`.an_print_panel_state.json` i aktuell arbetsmapp, sa de finns kvar efter
-restart av kernel nar cellen kors igen.
+den konfigurerade state-filen, eller defaultfilen `.an_print_panel_state.json`
+i aktuell arbetsmapp, sa de finns kvar efter restart av kernel nar cellen kors
+igen.
 
 ```python
 panel = Panel(allmanna_barighetsekvationen)                  # anvand senaste varden
+panel = Panel(allmanna_barighetsekvationen, key="fall_1")     # separat state per fall
 panel = Panel(allmanna_barighetsekvationen, use_last=False)  # tvinga schema-defaults
+panel = Panel(allmanna_barighetsekvationen, state_file="annan.json")
 panel = Panel(allmanna_barighetsekvationen, persist=False)   # spara inte till disk
 ```
 

@@ -27,8 +27,9 @@ class Panel:
     }
     _LAST_VALUES = {}
     STATE_FILENAME = ".an_print_panel_state.json"
+    _STATE_FILE = None
 
-    def __init__(self, funktion, use_last=True, persist=True):
+    def __init__(self, funktion, key=None, use_last=True, persist=True, state_file=None):
         schema = getattr(funktion, "panel_schema", None)
         if schema is None:
             namn = getattr(funktion, "__name__", repr(funktion))
@@ -36,12 +37,14 @@ class Panel:
 
         self.funktion = funktion
         self.schema = schema
+        self.key = key
         self.use_last = use_last
         self.persist = persist
+        self.state_file = state_file
         self.px = None
         self.details = None
         self.cb = None
-        self._last_key = self._make_last_key(funktion)
+        self._last_key = self._make_last_key(funktion, key)
         self._initial_values = self._load_initial_values() if use_last else {}
 
         self._widgets = self._load_widgets()
@@ -57,13 +60,24 @@ class Panel:
         self.widget = self._build_widget()
         self._attach_autosave_observers()
 
-    def _make_last_key(self, funktion):
+    @classmethod
+    def configure_state_file(cls, state_file):
+        cls._STATE_FILE = state_file
+
+    def _make_last_key(self, funktion, key=None):
         module = getattr(funktion, "__module__", "")
         name = getattr(funktion, "__name__", repr(funktion))
-        return f"{module}.{name}"
+        base = f"{module}.{name}"
+        if key is None:
+            return base
+        return f"{base}:{key}"
 
     def _state_path(self):
-        return Path.cwd() / self.STATE_FILENAME
+        state_file = self.state_file or self._STATE_FILE or self.STATE_FILENAME
+        path = Path(state_file)
+        if path.is_absolute():
+            return path
+        return Path.cwd() / path
 
     def _load_initial_values(self):
         values = {}
