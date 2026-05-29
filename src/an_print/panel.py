@@ -9,6 +9,58 @@ class Panel:
 
     Klassen ar en tunn orkestrerare: den bygger widgets fran schema, skapar
     ``px``, kor berakningsfunktionen och styr CalcBlock-redovisning.
+
+    Grundanvandning i notebook:
+
+    ```python
+    from an_calcs.geo import allmanna_barighetsekvationen
+    from an_print import Panel
+
+    panel = Panel(allmanna_barighetsekvationen)
+    panel
+    ```
+
+    Om samma notebook innehaller flera paneler for samma berakningsfunktion
+    ska ``key`` anvandas for att spara separata indata:
+
+    ```python
+    Panel(allmanna_barighetsekvationen, key="krysskran_10x10_barighet")
+    Panel(allmanna_barighetsekvationen, key="krysskran_6x6_barighet")
+    ```
+
+    Senaste faltvarden sparas automatiskt i en JSON-fil. Default ar
+    ``.an_print_panel_state.json`` i aktuell arbetsmapp. For en notebook eller
+    ett projekt kan en egen state-fil valjas en gang hogst upp:
+
+    ```python
+    Panel.configure_state_file("26022_smalandsvillan.panel_state.json")
+    ```
+
+    Prioritet for state-fil ar:
+
+    1. ``state_file`` direkt i ``Panel(...)``
+    2. fil satt via ``Panel.configure_state_file(...)``
+    3. default ``.an_print_panel_state.json``
+
+    Parametrar:
+        funktion:
+            Berakningsfunktion med ett ``panel_schema``-attribut.
+
+        key:
+            Frivillig nyckel for att skilja flera paneler for samma funktion.
+            Utan key delar alla paneler for samma funktion sparade varden.
+
+        use_last:
+            Om True fylls panelen med senast sparade varden nar de finns.
+            Om False anvands schema-defaults.
+
+        persist:
+            Om True sparas varden till state-fil. Om False sparas de bara i
+            aktiv Python-session.
+
+        state_file:
+            Frivillig filvag for just denna panel. Gar fore global
+            ``configure_state_file``.
     """
 
     DEFAULT_BLOCKS = {
@@ -62,6 +114,23 @@ class Panel:
 
     @classmethod
     def configure_state_file(cls, state_file):
+        """
+        Valjer defaultfil for panelstate i aktuell Python-session.
+
+        Anropas typiskt en gang hogst upp i en notebook:
+
+        ```python
+        from an_print import Panel
+
+        Panel.configure_state_file("26022_smalandsvillan.panel_state.json")
+        ```
+
+        Alla efterfoljande ``Panel(...)`` utan eget ``state_file`` anvander
+        denna fil. Relativa sokvagar tolkas relativt ``Path.cwd()``.
+
+        Om flera notebooks delar samma kernel galler senast anropad
+        ``configure_state_file`` for den kernel-sessionen.
+        """
         cls._STATE_FILE = state_file
 
     def _make_last_key(self, funktion, key=None):
