@@ -406,7 +406,12 @@ class Panel:
         if self._case_combo is not None:
             self._suspend_case_observer = True
             try:
-                self._case_combo.value = self._case_display(self._case_key)
+                display = self._case_display(self._case_key)
+                if display not in list(self._case_combo.options):
+                    self._case_combo.options = self._case_options()
+                if display not in list(self._case_combo.options):
+                    self._case_combo.options = list(self._case_combo.options) + [display]
+                self._case_combo.value = display
             finally:
                 self._suspend_case_observer = False
         self._refresh_case_controls()

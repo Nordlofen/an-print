@@ -15,12 +15,20 @@ sys.path.insert(0, str(ROOT / "an-calcs" / "src"))
 
 class _Widget:
     def __init__(self, value=None, description="", children=None, **kwargs):
-        self.value = value
+        self._value = value
         self.description = description
         self.children = list(children or [])
         self.kwargs = kwargs
         self.layout = kwargs.get("layout", {})
         self._observers = []
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        self._value = value
 
     def observe(self, callback, names=None):
         self._observers.append((callback, names))
@@ -63,8 +71,19 @@ class _Output(_Widget):
 
 class _Dropdown(_Widget):
     def __init__(self, options=None, value=None, description="", **kwargs):
-        super().__init__(value=value, description=description, options=options or [], **kwargs)
         self.options = options or []
+        super().__init__(value=value, description=description, options=options or [], **kwargs)
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        option_values = [option[1] if isinstance(option, tuple) else option for option in self.options]
+        if value is not None and value not in option_values:
+            raise ValueError(f"{value!r} not in array")
+        self._value = value
 
 
 class _Combobox(_Dropdown):
