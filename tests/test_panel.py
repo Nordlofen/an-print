@@ -147,6 +147,9 @@ class TestPanel(unittest.TestCase):
     def _label_text(self, field_row):
         return re.sub("<[^>]+>", "", field_row.children[0].value)
 
+    def _field_rows(self, panel):
+        return panel.widget.children[1].children[0].children
+
     def test_bygger_px_for_allmanna_barighetsekvationen(self):
         from an_calcs.geo import allmanna_barighetsekvationen
         from an_print import Panel
@@ -255,7 +258,7 @@ class TestPanel(unittest.TestCase):
         }
 
         panel = Panel(funktion)
-        field_rows = panel.widget.children[2].children[0].children
+        field_rows = self._field_rows(panel)
         row_labels = []
         for row in field_rows:
             row_labels.append([self._label_text(field_row) for field_row in row.children if field_row.children])
@@ -289,13 +292,13 @@ class TestPanel(unittest.TestCase):
 
         self.assertEqual(panel._field_widgets["direkt"].kwargs.get("indent"), False)
         self.assertEqual(panel._field_widgets["direkt"].layout.get("width"), "70px")
-        field_rows = panel.widget.children[2].children[0].children
+        field_rows = self._field_rows(panel)
         row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Last"]])
 
         panel._field_widgets["direkt"].set_value(True)
 
-        field_rows = panel.widget.children[2].children[0].children
+        field_rows = self._field_rows(panel)
         row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Moment"]])
 
@@ -314,7 +317,7 @@ class TestPanel(unittest.TestCase):
         }
 
         panel = Panel(funktion)
-        field_row = panel.widget.children[2].children[0].children[0].children[0]
+        field_row = self._field_rows(panel)[0].children[0]
 
         self.assertEqual(field_row.children[1].value, "<span style='display: inline-block; padding-left: 8px;'></span>")
 

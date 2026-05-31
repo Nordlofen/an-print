@@ -247,8 +247,7 @@ class Panel:
     def _build_widget(self):
         widgets = self._widgets
         title = self.schema.get("title") or getattr(self.funktion, "__name__", "Panel")
-        children = [widgets.HTML(f"<h3>{title}</h3>")]
-        children.append(self._build_case_box())
+        children = [self._build_header_box(title)]
         children.append(self._build_fields_box())
         children.append(self._build_blocks_box())
 
@@ -259,12 +258,28 @@ class Panel:
         children.append(self._output)
         return widgets.VBox(children)
 
+    def _build_header_box(self, title):
+        widgets = self._widgets
+        self._case_copy_key_html = widgets.HTML("")
+        self._case_status = widgets.HTML("")
+
+        title_row = widgets.HBox(
+            [widgets.HTML(f"<h3 style='margin:0;'>{html.escape(title)}</h3>"), self._case_copy_key_html],
+            layout=widgets.Layout(align_items="center", gap="12px", flex_flow="row nowrap"),
+        )
+
+        case_box = self._build_case_box()
+        return widgets.VBox(
+            [title_row, case_box],
+            layout=widgets.Layout(gap="8px", align_items="flex-start", margin="0 0 10px 0"),
+        )
+
     def _build_case_box(self):
         widgets = self._widgets
         self._case_combo = widgets.Dropdown(
             value=self._case_display_from_state_key(self._last_key),
             options=self._case_options(),
-            description="Fall",
+            description="",
             layout=widgets.Layout(width="230px"),
         )
         self._case_combo.observe(self._on_case_changed, names="value")
@@ -285,21 +300,34 @@ class Panel:
         self._case_delete_button.on_click(self._on_case_delete_clicked)
         self._case_reset_button = widgets.Button(description="Återställ")
         self._case_reset_button.on_click(self._on_case_reset_clicked)
-        self._case_copy_key_html = widgets.HTML("")
-        self._case_status = widgets.HTML("")
 
-        controls = widgets.HBox(
+        left_group = widgets.HBox(
             [
+                widgets.Label("Fall", layout=widgets.Layout(width="42px")),
                 self._case_combo,
                 self._case_name_input,
+            ],
+            layout=widgets.Layout(align_items="center", gap="8px", flex_flow="row nowrap"),
+        )
+
+        button_group = widgets.HBox(
+            [
                 self._case_save_button,
                 self._case_rename_button,
                 self._case_delete_button,
                 self._case_reset_button,
-                self._case_copy_key_html,
-                self._case_status,
             ],
-            layout=widgets.Layout(gap="8px", align_items="center", margin="0 0 10px 0"),
+            layout=widgets.Layout(align_items="center", gap="8px", flex_flow="row nowrap"),
+        )
+
+        controls = widgets.HBox(
+            [left_group, button_group, self._case_status],
+            layout=widgets.Layout(
+                gap="12px",
+                align_items="center",
+                margin="0 0 10px 0",
+                flex_flow="row nowrap",
+            ),
         )
         self._refresh_case_controls()
         return controls
@@ -375,7 +403,7 @@ class Panel:
         )
         if not self._case_key:
             self._case_copy_key_html.value = (
-                f"<button type='button' disabled style='{style} color: #999;'>"
+                f"<button type='button' disabled style='{style} color: #999; white-space: nowrap;'>"
                 "Kopiera Key</button>"
             )
             return
@@ -387,7 +415,7 @@ class Panel:
             ".catch(() => { this.textContent = 'Kunde inte kopiera'; });"
         )
         self._case_copy_key_html.value = (
-            f"<button type='button' style='{style}' onclick=\"{html.escape(js, quote=True)}\">"
+            f"<button type='button' style='{style} white-space: nowrap;' onclick=\"{html.escape(js, quote=True)}\">"
             "Kopiera Key</button>"
         )
 
