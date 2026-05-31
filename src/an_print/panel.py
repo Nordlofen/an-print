@@ -397,24 +397,51 @@ class Panel:
     def _refresh_copy_key_button(self):
         if self._case_copy_key_html is None:
             return
-        style = (
-            "font: inherit; padding: 3px 8px; border: 1px solid #ccc; "
-            "border-radius: 2px; background: #f7f7f7;"
+        style = """
+        <style>
+        .an-print-copy-key-button {
+            font: inherit;
+            padding: 3px 8px;
+            border: 1px solid #ccc;
+            border-radius: 2px;
+            background: #f7f7f7;
+            white-space: nowrap;
+            transition: background 120ms ease, border-color 120ms ease,
+                        box-shadow 120ms ease, transform 80ms ease;
+        }
+        .an-print-copy-key-button:active {
+            background: #e0e0e0;
+            transform: translateY(1px);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+        }
+        .an-print-copy-key-button.an-print-copy-key-clicked {
+            background: #e6f2ff;
+            border-color: #6aa9e9;
+        }
+        .an-print-copy-key-button:disabled {
+            color: #999;
+        }
+        </style>
+        """
+        button_class = "an-print-copy-key-button"
+        disabled_button = (
+            f"{style}<button type='button' class='{button_class}' disabled>"
+            "Kopiera Key</button>"
         )
         if not self._case_key:
-            self._case_copy_key_html.value = (
-                f"<button type='button' disabled style='{style} color: #999; white-space: nowrap;'>"
-                "Kopiera Key</button>"
-            )
+            self._case_copy_key_html.value = disabled_button
             return
 
         snippet = f'key="{self._case_key}"'
         js = (
+            "this.classList.add('an-print-copy-key-clicked');"
+            "setTimeout(() => this.classList.remove('an-print-copy-key-clicked'), 220);"
             f"navigator.clipboard.writeText({json.dumps(snippet, ensure_ascii=False)})"
             ".catch(() => {});"
         )
         self._case_copy_key_html.value = (
-            f"<button type='button' style='{style} white-space: nowrap;' onclick=\"{html.escape(js, quote=True)}\">"
+            f"{style}<button type='button' class='{button_class}' "
+            f"onclick=\"{html.escape(js, quote=True)}\">"
             "Kopiera Key</button>"
         )
 

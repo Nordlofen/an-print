@@ -687,8 +687,11 @@ class TestPanel(unittest.TestCase):
         panel = Panel(funktion, key="B1")
         button_html = html.unescape(panel._case_copy_key_html.value)
 
-        self.assertNotIn("disabled", button_html)
+        self.assertNotIn("<button type='button' class='an-print-copy-key-button' disabled", button_html)
         self.assertIn("navigator.clipboard.writeText", button_html)
+        self.assertIn("an-print-copy-key-button:active", button_html)
+        self.assertIn("an-print-copy-key-clicked", button_html)
+        self.assertIn("setTimeout", button_html)
         self.assertIn('key=\\"B1\\"', button_html)
         self.assertNotIn("Kopierat", button_html)
         self.assertNotIn("Kunde inte kopiera", button_html)
