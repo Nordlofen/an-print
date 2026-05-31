@@ -118,9 +118,11 @@ class Panel:
         self._table_widgets = {}
         self._block_widgets = {}
         self._case_combo = None
+        self._case_name_input = None
         self._case_save_button = None
         self._case_rename_button = None
         self._case_delete_button = None
+        self._case_reset_button = None
         self._case_status = None
         self._style = {"description_width": "0px"}
         self._input_layout = self._widgets.Layout(width="70px")
@@ -164,8 +166,7 @@ class Panel:
     def _initial_state_key(self, key):
         if key is not None:
             return self._make_last_key(self.funktion, key)
-        fallback_key = self._last_key_for_function()
-        return fallback_key or self._base_key
+        return self._base_key
 
     def _state_path(self):
         state_file = self.state_file or self._STATE_FILE or self.STATE_FILENAME
@@ -259,14 +260,21 @@ class Panel:
 
     def _build_case_box(self):
         widgets = self._widgets
-        self._case_combo = widgets.Combobox(
-            value=self._case_key_from_state_key(self._last_key),
+        self._case_combo = widgets.Dropdown(
+            value=self._case_display_from_state_key(self._last_key),
             options=self._case_options(),
             description="Fall",
-            ensure_option=False,
             layout=widgets.Layout(width="230px"),
         )
         self._case_combo.observe(self._on_case_changed, names="value")
+
+        self._case_name_input = widgets.Text(
+            value="",
+            description="",
+            layout=widgets.Layout(width="230px"),
+            style={"description_width": "0px"},
+        )
+        self._case_name_input.observe(self._on_case_name_changed, names="value")
 
         self._case_save_button = widgets.Button(description="Spara")
         self._case_save_button.on_click(self._on_case_save_clicked)
@@ -274,18 +282,23 @@ class Panel:
         self._case_rename_button.on_click(self._on_case_rename_clicked)
         self._case_delete_button = widgets.Button(description="Ta bort")
         self._case_delete_button.on_click(self._on_case_delete_clicked)
+        self._case_reset_button = widgets.Button(description="Återställ")
+        self._case_reset_button.on_click(self._on_case_reset_clicked)
         self._case_status = widgets.HTML("")
 
         controls = widgets.HBox(
             [
                 self._case_combo,
+                self._case_name_input,
                 self._case_save_button,
                 self._case_rename_button,
                 self._case_delete_button,
+                self._case_reset_button,
                 self._case_status,
             ],
             layout=widgets.Layout(gap="8px", align_items="center", margin="0 0 10px 0"),
         )
+        self._refresh_case_controls()
         return controls
 
     def _case_key_from_state_key(self, state_key):
@@ -294,8 +307,20 @@ class Panel:
             return state_key[len(prefix):]
         return ""
 
+    def _case_display(self, case_key):
+        return "-" if not case_key else case_key
+
+    def _display_to_case_key(self, display_value):
+        case_key = "" if display_value is None else str(display_value).strip()
+        if case_key == "-":
+            return ""
+        return case_key
+
+    def _case_display_from_state_key(self, state_key):
+        return self._case_display(self._case_key_from_state_key(state_key))
+
     def _state_key_for_case(self, case_key):
-        case_key = "" if case_key is None else str(case_key).strip()
+        case_key = self._display_to_case_key(case_key)
         if not case_key:
             return self._base_key
         return f"{self._base_key}:{case_key}"
@@ -304,13 +329,15 @@ class Panel:
         keys = set()
         state = self._read_persisted_values()
         prefix = f"{self._base_key}:"
-        if self._base_key in state or self._base_key in self._LAST_VALUES:
-            keys.add("")
+        keys.add("")
         for source in (state, self._LAST_VALUES):
             for key in source:
-                if key.startswith(prefix):
+                if key == self._base_key:
+                    keys.add("")
+                elif key.startswith(prefix):
                     keys.add(key[len(prefix):])
-        return sorted(keys)
+        named_keys = sorted(key for key in keys if key)
+        return [self._case_display("")] + named_keys
 
     def _refresh_case_options(self):
         if self._case_combo is None:
@@ -323,26 +350,54 @@ class Panel:
                 "<span style='color:#555; font-size:12px;'>" + html.escape(message) + "</span>"
             )
 
+    def _refresh_case_controls(self):
+        active_is_base = not self._case_key
+        name_value = "" if self._case_name_input is None else str(self._case_name_input.value).strip()
+        if self._case_save_button is not None:
+            self._case_save_button.disabled = active_is_base and not name_value
+        if self._case_rename_button is not None:
+            self._case_rename_button.disabled = active_is_base or not name_value
+        if self._case_delete_button is not None:
+            self._case_delete_button.disabled = active_is_base
+        if self._case_reset_button is not None:
+            self._case_reset_button.disabled = active_is_base
+
     def _on_case_changed(self, change):
         if self._suspend_case_observer:
             return
-        case_key = "" if change.get("new") is None else str(change.get("new")).strip()
+        case_key = self._display_to_case_key(change.get("new"))
         state_key = self._state_key_for_case(case_key)
         values = self._load_values_for_key(state_key)
-        if not values:
-            return
         self._set_active_state_key(state_key)
-        self._apply_values(values)
-        self._set_case_status("Laddat")
+        if self._case_name_input is not None:
+            self._case_name_input.value = ""
+        self._refresh_case_controls()
+        if values:
+            self._apply_values(values)
+            self._set_case_status("Laddat")
+
+    def _on_case_name_changed(self, _change):
+        self._refresh_case_controls()
 
     def _on_case_save_clicked(self, _button):
-        self._save_case(self._case_combo.value if self._case_combo is not None else self._case_key)
+        case_key = ""
+        if self._case_name_input is not None and str(self._case_name_input.value).strip():
+            case_key = str(self._case_name_input.value).strip()
+        elif self._case_combo is not None:
+            case_key = self._display_to_case_key(self._case_combo.value)
+        else:
+            case_key = self._case_key
+        self._save_case(case_key)
 
     def _on_case_rename_clicked(self, _button):
-        self._rename_case(self._case_combo.value if self._case_combo is not None else self._case_key)
+        new_case_key = "" if self._case_name_input is None else str(self._case_name_input.value).strip()
+        self._rename_case(new_case_key)
 
     def _on_case_delete_clicked(self, _button):
         self._delete_active_case()
+
+    def _on_case_reset_clicked(self, _button):
+        self._reset_active_case()
 
     def _set_active_state_key(self, state_key):
         self._last_key = state_key
@@ -351,18 +406,22 @@ class Panel:
         if self._case_combo is not None:
             self._suspend_case_observer = True
             try:
-                self._case_combo.value = self._case_key
+                self._case_combo.value = self._case_display(self._case_key)
             finally:
                 self._suspend_case_observer = False
+        self._refresh_case_controls()
 
     def _save_case(self, case_key):
         state_key = self._state_key_for_case(case_key)
         self._set_active_state_key(state_key)
         self._save_last_values()
         self._refresh_case_options()
+        if self._case_name_input is not None:
+            self._case_name_input.value = ""
         self._set_case_status("Sparat")
 
     def _rename_case(self, new_case_key):
+        new_case_key = self._display_to_case_key(new_case_key)
         new_state_key = self._state_key_for_case(new_case_key)
         if new_state_key == self._last_key:
             self._set_case_status("Oförändrat namn")
@@ -380,7 +439,18 @@ class Panel:
         self._LAST_BY_FUNCTION[self._base_key] = new_state_key
         self._set_active_state_key(new_state_key)
         self._refresh_case_options()
+        if self._case_name_input is not None:
+            self._case_name_input.value = ""
         self._set_case_status("Bytte namn")
+
+    def _reset_active_case(self):
+        values = self._load_values_for_key(self._last_key)
+        if not values:
+            return
+        self._apply_values(values)
+        if self._case_name_input is not None:
+            self._case_name_input.value = ""
+        self._set_case_status("Återställd")
 
     def _delete_active_case(self):
         state = self._read_persisted_values()
@@ -406,6 +476,9 @@ class Panel:
         if next_key:
             self._LAST_BY_FUNCTION[self._base_key] = next_key
         self._refresh_case_options()
+        if self._case_name_input is not None:
+            self._case_name_input.value = ""
+        self._refresh_case_controls()
         self._set_case_status("Tog bort")
 
     def _next_state_key_after_delete(self, state):
@@ -647,6 +720,8 @@ class Panel:
         for widget in self._field_widgets.values():
             if hasattr(widget, "observe"):
                 widget.observe(lambda _change: self._mark_dirty(), names="value")
+        if self._case_name_input is not None and hasattr(self._case_name_input, "observe"):
+            self._case_name_input.observe(lambda _change: self._refresh_case_controls(), names="value")
         for block in self._block_widgets.values():
             for widget in block.values():
                 if hasattr(widget, "observe"):
@@ -733,6 +808,7 @@ class Panel:
             self._refresh_field_groups()
         finally:
             self._suspend_case_observer = False
+        self._refresh_case_controls()
 
     def _block_values(self):
         values = {}
