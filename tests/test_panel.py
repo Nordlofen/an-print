@@ -1,4 +1,5 @@
 import os
+import json
 import pathlib
 import re
 import sys
@@ -63,6 +64,10 @@ class _Dropdown(_Widget):
         self.options = options or []
 
 
+class _Combobox(_Dropdown):
+    pass
+
+
 class FakeWidgets(types.SimpleNamespace):
     def __init__(self):
         super().__init__(
@@ -84,6 +89,7 @@ class FakeWidgets(types.SimpleNamespace):
                 value=value, description=description, **kwargs
             ),
             Dropdown=_Dropdown,
+            Combobox=_Combobox,
             Output=_Output,
             Layout=lambda **kwargs: kwargs,
         )
@@ -226,7 +232,7 @@ class TestPanel(unittest.TestCase):
         }
 
         panel = Panel(funktion)
-        field_rows = panel.widget.children[1].children[0].children
+        field_rows = panel.widget.children[2].children[0].children
         row_labels = []
         for row in field_rows:
             row_labels.append([self._label_text(field_row) for field_row in row.children if field_row.children])
@@ -260,13 +266,13 @@ class TestPanel(unittest.TestCase):
 
         self.assertEqual(panel._field_widgets["direkt"].kwargs.get("indent"), False)
         self.assertEqual(panel._field_widgets["direkt"].layout.get("width"), "70px")
-        field_rows = panel.widget.children[1].children[0].children
+        field_rows = panel.widget.children[2].children[0].children
         row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Last"]])
 
         panel._field_widgets["direkt"].set_value(True)
 
-        field_rows = panel.widget.children[1].children[0].children
+        field_rows = panel.widget.children[2].children[0].children
         row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Moment"]])
 
@@ -285,7 +291,7 @@ class TestPanel(unittest.TestCase):
         }
 
         panel = Panel(funktion)
-        field_row = panel.widget.children[1].children[0].children[0].children[0]
+        field_row = panel.widget.children[2].children[0].children[0].children[0]
 
         self.assertEqual(field_row.children[1].value, "<span style='display: inline-block; padding-left: 8px;'></span>")
 
@@ -344,6 +350,7 @@ class TestPanel(unittest.TestCase):
             panel = Panel(funktion)
             panel._field_widgets["a"].value = 9.0
             panel.calculate()
+            panel._case_save_button.click()
 
             panel2 = Panel(funktion)
         finally:
@@ -367,8 +374,10 @@ class TestPanel(unittest.TestCase):
 
         panel_a = Panel(funktion, key="fall_a")
         panel_a._field_widgets["a"].set_value(10.0)
+        panel_a._case_save_button.click()
         panel_b = Panel(funktion, key="fall_b")
         panel_b._field_widgets["a"].set_value(20.0)
+        panel_b._case_save_button.click()
         Panel._LAST_VALUES.clear()
         Panel._LAST_BY_FUNCTION.clear()
 
@@ -389,6 +398,7 @@ class TestPanel(unittest.TestCase):
 
         panel_a = Panel(funktion, key="fall_a")
         panel_a._field_widgets["a"].set_value(10.0)
+        panel_a._case_save_button.click()
 
         panel_b = Panel(funktion, key="fall_b")
 
@@ -408,8 +418,10 @@ class TestPanel(unittest.TestCase):
 
         panel_a = Panel(funktion, key="fall_a")
         panel_a._field_widgets["a"].set_value(10.0)
+        panel_a._case_save_button.click()
         panel_b = Panel(funktion, key="fall_b")
         panel_b._field_widgets["a"].set_value(20.0)
+        panel_b._case_save_button.click()
 
         panel_a_again = Panel(funktion, key="fall_a")
 
@@ -429,6 +441,7 @@ class TestPanel(unittest.TestCase):
 
         panel_a = Panel(funktion, key="fall_a")
         panel_a._field_widgets["a"].set_value(10.0)
+        panel_a._case_save_button.click()
         Panel._LAST_VALUES.clear()
         Panel._LAST_BY_FUNCTION.clear()
 
@@ -450,6 +463,7 @@ class TestPanel(unittest.TestCase):
 
         panel = Panel(funktion)
         panel._field_widgets["a"].set_value(12.0)
+        panel._case_save_button.click()
         Panel._LAST_VALUES.clear()
         Panel._LAST_BY_FUNCTION.clear()
 
@@ -470,6 +484,7 @@ class TestPanel(unittest.TestCase):
         Panel.configure_state_file("projekt.panel_state.json")
         panel = Panel(funktion)
         panel._field_widgets["a"].set_value(13.0)
+        panel._case_save_button.click()
 
         self.assertTrue((pathlib.Path.cwd() / "projekt.panel_state.json").exists())
         self.assertFalse((pathlib.Path.cwd() / ".an_print_panel_state.json").exists())
@@ -493,6 +508,7 @@ class TestPanel(unittest.TestCase):
         Panel.configure_state_file("global.panel_state.json")
         panel = Panel(funktion, state_file="lokal.panel_state.json")
         panel._field_widgets["a"].set_value(14.0)
+        panel._case_save_button.click()
 
         self.assertTrue((pathlib.Path.cwd() / "lokal.panel_state.json").exists())
         self.assertFalse((pathlib.Path.cwd() / "global.panel_state.json").exists())
@@ -504,7 +520,7 @@ class TestPanel(unittest.TestCase):
             14.0,
         )
 
-    def test_faltandring_sparas_till_disk_utan_berakning(self):
+    def test_spara_skriver_till_disk_utan_berakning(self):
         from an_print import Panel
 
         Panel._LAST_VALUES.clear()
@@ -521,11 +537,153 @@ class TestPanel(unittest.TestCase):
 
         panel = Panel(funktion)
         panel._field_widgets["a"].set_value(11.0)
+        panel._case_save_button.click()
         Panel._LAST_VALUES.clear()
 
         panel2 = Panel(funktion)
 
         self.assertEqual(panel2._field_widgets["a"].value, 11.0)
+
+    def test_spara_med_nytt_fallnamn_skapar_key_fran_aktuella_varden(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel = Panel(funktion)
+        panel._field_widgets["a"].set_value(21.0)
+        panel._case_combo.set_value("B1")
+        panel._case_save_button.click()
+
+        self.assertEqual(panel.key, "B1")
+        self.assertEqual(panel._case_combo.options, ["B1"])
+        self.assertEqual(Panel(funktion, key="B1")._field_widgets["a"].value, 21.0)
+
+    def test_val_i_combobox_laddar_befintligt_fall_for_samma_funktion(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel_a = Panel(funktion, key="B1")
+        panel_a._field_widgets["a"].set_value(21.0)
+        panel_a._case_save_button.click()
+        panel_b = Panel(funktion, key="B2")
+        panel_b._field_widgets["a"].set_value(22.0)
+        panel_b._case_save_button.click()
+
+        panel = Panel(funktion)
+        panel._case_combo.set_value("B1")
+
+        self.assertEqual(panel._field_widgets["a"].value, 21.0)
+        self.assertEqual(panel.key, "B1")
+
+    def test_byt_namn_flyttar_state_utan_att_tappa_varden(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel = Panel(funktion, key="B1")
+        panel._field_widgets["a"].set_value(31.0)
+        panel._case_save_button.click()
+        panel._case_combo.set_value("3.3 - B1")
+        panel._case_rename_button.click()
+
+        state = json.loads((pathlib.Path.cwd() / ".an_print_panel_state.json").read_text())
+        self.assertNotIn(f"{panel._base_key}:B1", state)
+        self.assertIn(f"{panel._base_key}:3.3 - B1", state)
+        self.assertEqual(panel.key, "3.3 - B1")
+        self.assertEqual(Panel(funktion, key="3.3 - B1")._field_widgets["a"].value, 31.0)
+
+    def test_ta_bort_tar_bort_aktivt_fall(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel = Panel(funktion, key="B1")
+        panel._field_widgets["a"].set_value(41.0)
+        panel._case_save_button.click()
+        panel._case_delete_button.click()
+
+        state = json.loads((pathlib.Path.cwd() / ".an_print_panel_state.json").read_text())
+        self.assertNotIn(f"{panel._base_key}:B1", state)
+        self.assertEqual(panel._case_combo.options, [])
+        self.assertEqual(panel._field_widgets["a"].value, 2.0)
+
+    def test_berakna_uppdatera_skriver_inte_panelstate(self):
+        import an_print.calcblock as calcblock_module
+        from an_print import Panel
+
+        def funktion(px):
+            return {
+                "metodbeskrivning": {"title": "MB", "items": []},
+                "indata": {"title": "ID", "items": []},
+                "delresultat": {"title": "DR", "items": []},
+                "slutresultat": {"title": "SR", "items": []},
+                "ekvationer": {"title": "EKV", "items": []},
+            }
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        class FakeCalcBlock:
+            def __init__(self, details):
+                self.details = details
+
+            def MB(self, **kwargs):
+                pass
+
+            def ID(self, **kwargs):
+                pass
+
+            def DR(self, **kwargs):
+                pass
+
+            def EKV(self, **kwargs):
+                pass
+
+            def SR(self, **kwargs):
+                pass
+
+        original = calcblock_module.CalcBlock
+        calcblock_module.CalcBlock = FakeCalcBlock
+        try:
+            panel = Panel(funktion, key="B1")
+            panel._field_widgets["a"].set_value(51.0)
+            panel.calculate()
+        finally:
+            calcblock_module.CalcBlock = original
+
+        self.assertFalse((pathlib.Path.cwd() / ".an_print_panel_state.json").exists())
 
     def test_redovisningsinstallningar_sparas_till_disk(self):
         from an_print import Panel
@@ -545,6 +703,7 @@ class TestPanel(unittest.TestCase):
         panel._block_widgets["DR"]["rader"].set_value(12)
         panel._block_widgets["EKV"]["visa"].set_value(True)
         panel._block_widgets["SR"]["etikett"].set_value(False)
+        panel._case_save_button.click()
         Panel._LAST_VALUES.clear()
 
         panel2 = Panel(funktion)
@@ -586,6 +745,7 @@ class TestPanel(unittest.TestCase):
             table = panel._table_widgets["jordlager"]
             table.rows[0]["controls"]["dz"].value = 2.5
             panel.calculate()
+            panel._case_save_button.click()
 
             panel2 = Panel(sattning)
         finally:

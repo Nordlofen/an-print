@@ -53,11 +53,15 @@ from an_print import Panel
 Panel.configure_state_file("26022_smalandsvillan.panel_state.json")
 ```
 
-`Panel` sparar faltandringar automatiskt per berakningsfunktion. Senaste
-varden ateranvands i nya paneler och skrivs aven till
-den konfigurerade state-filen, eller defaultfilen `.an_print_panel_state.json`
-i aktuell arbetsmapp, sa de finns kvar efter restart av kernel nar cellen kors
-igen.
+`Panel` har en fallrad dar berakningsfall kan valjas, skapas, bytas namn pa
+och tas bort direkt i notebookinterfacet. Skriv ett fallnamn i comboboxen och
+klicka `Spara` for att skriva aktuella indata och redovisningsval till
+state-filen. `Berakna / uppdatera` kor bara berakningen och renderar
+redovisningen.
+
+Sparade varden ateranvands i nya paneler och skrivs till den konfigurerade
+state-filen, eller defaultfilen `.an_print_panel_state.json` i aktuell
+arbetsmapp, sa de finns kvar efter restart av kernel nar cellen kors igen.
 
 ```python
 panel = Panel(allmanna_barighetsekvationen)                  # anvand senaste varden
@@ -67,12 +71,13 @@ panel = Panel(allmanna_barighetsekvationen, state_file="annan.json")
 
 Nar en panel skapas laddas startvarden i denna ordning:
 
-1. sparade varden for exakt samma funktion och `key`
+1. sparade varden for exakt samma funktion och `key`, om `key` anges
 2. senaste sparade panel for samma funktion i samma state-fil
 3. defaultvarden fran `panel_schema`
 
 Det betyder att ett nytt fall kan borja som kopia av foregaende panel for samma
-funktion, men sparas separat nar den nya panelen har en egen `key`.
+funktion, men sparas separat nar anvandaren skriver ett nytt fallnamn och
+klickar `Spara`.
 
 Vid knapptryck:
 

@@ -35,12 +35,19 @@ class Panel:
     3. defaultvarden fran ``panel_schema``
 
     Det gor att ett nytt berakningsfall kan starta som kopia av foregaende
-    panel for samma funktion, men far egen state sa fort den nya panelen
-    autosparas.
+    panel for samma funktion, men far egen state nar anvandaren sparar.
 
-    Senaste faltvarden sparas automatiskt i en JSON-fil. Default ar
-    ``.an_print_panel_state.json`` i aktuell arbetsmapp. For en notebook eller
-    ett projekt kan en egen state-fil valjas en gang hogst upp:
+    Panelen visar en fallrad med en combobox och knapparna ``Spara``,
+    ``Byt namn`` och ``Ta bort``. Skriv ett nytt fallnamn och klicka
+    ``Spara`` for att skapa ett nytt sparat fall fran aktuella indata.
+    Valj ett befintligt fall i comboboxen for att ladda det. ``Byt namn``
+    flyttar aktivt fall till det namn som star i comboboxen.
+
+    Faltvarden sparas i en JSON-fil nar anvandaren klickar ``Spara``.
+    ``Berakna / uppdatera`` kor berakningen och renderar redovisning utan att
+    skriva panelstate. Default ar ``.an_print_panel_state.json`` i
+    aktuell arbetsmapp. For en notebook eller ett projekt kan en egen
+    state-fil valjas en gang hogst upp:
 
     ```python
     Panel.configure_state_file("26022_smalandsvillan.panel_state.json")
@@ -99,8 +106,10 @@ class Panel:
         self.details = None
         self.cb = None
         self._base_key = self._make_base_key(funktion)
-        self._last_key = self._make_last_key(funktion, key)
+        self._case_key = "" if key is None else str(key)
+        self._last_key = self._initial_state_key(key)
         self._initial_values = self._load_initial_values()
+        self._suspend_case_observer = False
 
         self._widgets = self._load_widgets()
         self._field_widgets = {}
@@ -108,6 +117,11 @@ class Panel:
         self._scalar_field_groups = []
         self._table_widgets = {}
         self._block_widgets = {}
+        self._case_combo = None
+        self._case_save_button = None
+        self._case_rename_button = None
+        self._case_delete_button = None
+        self._case_status = None
         self._style = {"description_width": "0px"}
         self._input_layout = self._widgets.Layout(width="70px")
         self._label_layout = self._widgets.Layout(width="210px")
@@ -147,6 +161,12 @@ class Panel:
             return base
         return f"{base}:{key}"
 
+    def _initial_state_key(self, key):
+        if key is not None:
+            return self._make_last_key(self.funktion, key)
+        fallback_key = self._last_key_for_function()
+        return fallback_key or self._base_key
+
     def _state_path(self):
         state_file = self.state_file or self._STATE_FILE or self.STATE_FILENAME
         path = Path(state_file)
@@ -184,11 +204,19 @@ class Panel:
             return {}
 
     def _write_persisted_values(self):
+        self._write_values_for_key(self._last_key, self._LAST_VALUES.get(self._last_key, {}))
+
+    def _write_values_for_key(self, key, values):
         state = self._read_persisted_values()
-        state[self._last_key] = self._LAST_VALUES.get(self._last_key, {})
+        state[key] = values
         meta = state.setdefault(self.STATE_META_KEY, {})
         last_by_function = meta.setdefault("last_by_function", {})
-        last_by_function[self._base_key] = self._last_key
+        last_by_function[self._base_key] = key
+        self._state_path().write_text(
+            json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    def _write_state(self, state):
         self._state_path().write_text(
             json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -218,6 +246,7 @@ class Panel:
         widgets = self._widgets
         title = self.schema.get("title") or getattr(self.funktion, "__name__", "Panel")
         children = [widgets.HTML(f"<h3>{title}</h3>")]
+        children.append(self._build_case_box())
         children.append(self._build_fields_box())
         children.append(self._build_blocks_box())
 
@@ -227,6 +256,174 @@ class Panel:
         self._output = widgets.Output()
         children.append(self._output)
         return widgets.VBox(children)
+
+    def _build_case_box(self):
+        widgets = self._widgets
+        self._case_combo = widgets.Combobox(
+            value=self._case_key_from_state_key(self._last_key),
+            options=self._case_options(),
+            description="Fall",
+            ensure_option=False,
+            layout=widgets.Layout(width="230px"),
+        )
+        self._case_combo.observe(self._on_case_changed, names="value")
+
+        self._case_save_button = widgets.Button(description="Spara")
+        self._case_save_button.on_click(self._on_case_save_clicked)
+        self._case_rename_button = widgets.Button(description="Byt namn")
+        self._case_rename_button.on_click(self._on_case_rename_clicked)
+        self._case_delete_button = widgets.Button(description="Ta bort")
+        self._case_delete_button.on_click(self._on_case_delete_clicked)
+        self._case_status = widgets.HTML("")
+
+        controls = widgets.HBox(
+            [
+                self._case_combo,
+                self._case_save_button,
+                self._case_rename_button,
+                self._case_delete_button,
+                self._case_status,
+            ],
+            layout=widgets.Layout(gap="8px", align_items="center", margin="0 0 10px 0"),
+        )
+        return controls
+
+    def _case_key_from_state_key(self, state_key):
+        prefix = f"{self._base_key}:"
+        if state_key.startswith(prefix):
+            return state_key[len(prefix):]
+        return ""
+
+    def _state_key_for_case(self, case_key):
+        case_key = "" if case_key is None else str(case_key).strip()
+        if not case_key:
+            return self._base_key
+        return f"{self._base_key}:{case_key}"
+
+    def _case_options(self):
+        keys = set()
+        state = self._read_persisted_values()
+        prefix = f"{self._base_key}:"
+        if self._base_key in state or self._base_key in self._LAST_VALUES:
+            keys.add("")
+        for source in (state, self._LAST_VALUES):
+            for key in source:
+                if key.startswith(prefix):
+                    keys.add(key[len(prefix):])
+        return sorted(keys)
+
+    def _refresh_case_options(self):
+        if self._case_combo is None:
+            return
+        self._case_combo.options = self._case_options()
+
+    def _set_case_status(self, message):
+        if self._case_status is not None:
+            self._case_status.value = (
+                "<span style='color:#555; font-size:12px;'>" + html.escape(message) + "</span>"
+            )
+
+    def _on_case_changed(self, change):
+        if self._suspend_case_observer:
+            return
+        case_key = "" if change.get("new") is None else str(change.get("new")).strip()
+        state_key = self._state_key_for_case(case_key)
+        values = self._load_values_for_key(state_key)
+        if not values:
+            return
+        self._set_active_state_key(state_key)
+        self._apply_values(values)
+        self._set_case_status("Laddat")
+
+    def _on_case_save_clicked(self, _button):
+        self._save_case(self._case_combo.value if self._case_combo is not None else self._case_key)
+
+    def _on_case_rename_clicked(self, _button):
+        self._rename_case(self._case_combo.value if self._case_combo is not None else self._case_key)
+
+    def _on_case_delete_clicked(self, _button):
+        self._delete_active_case()
+
+    def _set_active_state_key(self, state_key):
+        self._last_key = state_key
+        self._case_key = self._case_key_from_state_key(state_key)
+        self.key = self._case_key or None
+        if self._case_combo is not None:
+            self._suspend_case_observer = True
+            try:
+                self._case_combo.value = self._case_key
+            finally:
+                self._suspend_case_observer = False
+
+    def _save_case(self, case_key):
+        state_key = self._state_key_for_case(case_key)
+        self._set_active_state_key(state_key)
+        self._save_last_values()
+        self._refresh_case_options()
+        self._set_case_status("Sparat")
+
+    def _rename_case(self, new_case_key):
+        new_state_key = self._state_key_for_case(new_case_key)
+        if new_state_key == self._last_key:
+            self._set_case_status("Oförändrat namn")
+            return
+        values = self._collect_values()
+        state = self._read_persisted_values()
+        state.pop(self._last_key, None)
+        state[new_state_key] = values
+        meta = state.setdefault(self.STATE_META_KEY, {})
+        meta.setdefault("last_by_function", {})[self._base_key] = new_state_key
+        self._write_state(state)
+
+        self._LAST_VALUES.pop(self._last_key, None)
+        self._LAST_VALUES[new_state_key] = values
+        self._LAST_BY_FUNCTION[self._base_key] = new_state_key
+        self._set_active_state_key(new_state_key)
+        self._refresh_case_options()
+        self._set_case_status("Bytte namn")
+
+    def _delete_active_case(self):
+        state = self._read_persisted_values()
+        state.pop(self._last_key, None)
+        self._LAST_VALUES.pop(self._last_key, None)
+
+        next_key = self._next_state_key_after_delete(state)
+        meta = state.setdefault(self.STATE_META_KEY, {})
+        last_by_function = meta.setdefault("last_by_function", {})
+        if next_key:
+            last_by_function[self._base_key] = next_key
+        else:
+            last_by_function.pop(self._base_key, None)
+        self._write_state(state)
+
+        if next_key:
+            self._set_active_state_key(next_key)
+            self._apply_values(self._load_values_for_key(next_key))
+        else:
+            self._set_active_state_key(self._base_key)
+            self._apply_values({})
+        self._LAST_BY_FUNCTION.pop(self._base_key, None)
+        if next_key:
+            self._LAST_BY_FUNCTION[self._base_key] = next_key
+        self._refresh_case_options()
+        self._set_case_status("Tog bort")
+
+    def _next_state_key_after_delete(self, state):
+        keys = self._state_keys_for_function(state)
+        if not keys:
+            return None
+        previous_latest = state.get(self.STATE_META_KEY, {}).get("last_by_function", {}).get(self._base_key)
+        if previous_latest in keys:
+            return previous_latest
+        return keys[-1]
+
+    def _state_keys_for_function(self, state):
+        prefix = f"{self._base_key}:"
+        keys = []
+        if self._base_key in state:
+            keys.append(self._base_key)
+        keys.extend(key for key in state if key.startswith(prefix))
+        return keys
 
     def _build_fields_box(self):
         widgets = self._widgets
@@ -241,7 +438,7 @@ class Panel:
                     widgets,
                     field,
                     self._initial_values.get(field["name"]),
-                    on_change=self._save_last_values,
+                    on_change=self._mark_dirty,
                 )
                 self._table_widgets[field["name"]] = table
                 rows.append(table.widget)
@@ -449,12 +646,14 @@ class Panel:
     def _attach_autosave_observers(self):
         for widget in self._field_widgets.values():
             if hasattr(widget, "observe"):
-                widget.observe(lambda _change: self._save_last_values(), names="value")
+                widget.observe(lambda _change: self._mark_dirty(), names="value")
         for block in self._block_widgets.values():
             for widget in block.values():
                 if hasattr(widget, "observe"):
-                    widget.observe(lambda _change: self._save_last_values(), names="value")
-        self._save_last_values()
+                    widget.observe(lambda _change: self._mark_dirty(), names="value")
+
+    def _mark_dirty(self):
+        self._set_case_status("Osparat")
 
     def _on_calculate_clicked(self, _button):
         self._output.clear_output()
@@ -489,20 +688,51 @@ class Panel:
         self.px = self.to_px()
         self.details = self.funktion(self.px)
         self.cb = CalcBlock(self.details)
-        self._save_last_values()
         self._render_blocks()
         return self.details
 
     def _save_last_values(self):
+        values = self._collect_values()
+        self._LAST_VALUES[self._last_key] = values
+        self._LAST_BY_FUNCTION[self._base_key] = self._last_key
+        self._write_persisted_values()
+        self._refresh_case_options()
+        self._set_case_status("Sparat")
+
+    def _collect_values(self):
         values = {}
         for name, widget in self._field_widgets.items():
             values[name] = widget.value
         for name, table in self._table_widgets.items():
             values[name] = table.rows_as_values()
         values["__blocks__"] = self._block_values()
-        self._LAST_VALUES[self._last_key] = values
-        self._LAST_BY_FUNCTION[self._base_key] = self._last_key
-        self._write_persisted_values()
+        return values
+
+    def _apply_values(self, values):
+        self._suspend_case_observer = True
+        try:
+            for field in self.schema.get("fields", []):
+                name = field["name"]
+                if field.get("type") == "table":
+                    table = self._table_widgets.get(name)
+                    if table is not None:
+                        table.set_rows(values.get(name, field.get("default_rows") or [{}]))
+                    continue
+                widget = self._field_widgets.get(name)
+                if widget is not None:
+                    widget.value = values.get(name, field.get("default"))
+            saved_blocks = values.get("__blocks__", {})
+            for name, block in self._block_widgets.items():
+                defaults = dict(self.DEFAULT_BLOCKS[name])
+                defaults.update(self.schema.get("blocks", {}).get(name, {}))
+                defaults.update(saved_blocks.get(name, {}))
+                block["visa"].value = bool(defaults.get("visa", False))
+                if name != "MB":
+                    block["etikett"].value = bool(defaults.get("etikett", True))
+                    block["rader"].value = int(defaults.get("rader", 10))
+            self._refresh_field_groups()
+        finally:
+            self._suspend_case_observer = False
 
     def _block_values(self):
         values = {}
@@ -581,6 +811,12 @@ class _TableInput:
         self.rows.append(row)
         self._refresh_rows()
         self._notify_change()
+
+    def set_rows(self, rows):
+        self.rows = []
+        self.rows_box.children = []
+        for row in rows or [{}]:
+            self.add_row(row)
 
     def _make_row_widget(self, row):
         widgets = self.widgets
