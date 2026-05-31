@@ -690,6 +690,8 @@ class TestPanel(unittest.TestCase):
         self.assertNotIn("disabled", button_html)
         self.assertIn("navigator.clipboard.writeText", button_html)
         self.assertIn('key=\\"B1\\"', button_html)
+        self.assertNotIn("Kopierat", button_html)
+        self.assertNotIn("Kunde inte kopiera", button_html)
 
     def test_kopiera_key_knapp_uppdateras_vid_dropdownbyte(self):
         from an_print import Panel

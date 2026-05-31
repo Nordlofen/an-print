@@ -411,8 +411,7 @@ class Panel:
         snippet = f'key="{self._case_key}"'
         js = (
             f"navigator.clipboard.writeText({json.dumps(snippet, ensure_ascii=False)})"
-            ".then(() => { this.textContent = 'Kopierat'; })"
-            ".catch(() => { this.textContent = 'Kunde inte kopiera'; });"
+            ".catch(() => {});"
         )
         self._case_copy_key_html.value = (
             f"<button type='button' style='{style} white-space: nowrap;' onclick=\"{html.escape(js, quote=True)}\">"
