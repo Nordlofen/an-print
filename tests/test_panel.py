@@ -1,5 +1,6 @@
 import os
 import json
+import html
 import pathlib
 import re
 import sys
@@ -643,6 +644,8 @@ class TestPanel(unittest.TestCase):
         self.assertTrue(panel._case_rename_button.disabled)
         self.assertTrue(panel._case_delete_button.disabled)
         self.assertTrue(panel._case_reset_button.disabled)
+        self.assertIn("disabled", panel._case_copy_key_html.value)
+        self.assertIn("Kopiera Key", panel._case_copy_key_html.value)
 
     def test_dropdown_visar_minus_forst_och_fall_alfabetiskt(self):
         from an_print import Panel
@@ -665,6 +668,67 @@ class TestPanel(unittest.TestCase):
         panel._case_save_button.click()
 
         self.assertEqual(panel._case_combo.options, ["-", "A1", "B2"])
+
+    def test_kopiera_key_knapp_innehaller_aktiv_key(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel = Panel(funktion, key="B1")
+        button_html = html.unescape(panel._case_copy_key_html.value)
+
+        self.assertNotIn("disabled", button_html)
+        self.assertIn("navigator.clipboard.writeText", button_html)
+        self.assertIn('key=\\"B1\\"', button_html)
+
+    def test_kopiera_key_knapp_uppdateras_vid_dropdownbyte(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        panel_a = Panel(funktion, key="B1")
+        panel_a._case_save_button.click()
+        panel_b = Panel(funktion, key="B2")
+        panel_b._case_save_button.click()
+
+        panel = Panel(funktion)
+        panel._case_combo.set_value("B2")
+        button_html = html.unescape(panel._case_copy_key_html.value)
+
+        self.assertIn('key=\\"B2\\"', button_html)
+
+    def test_kopiera_key_knapp_js_escapar_key(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["a"],
+            "fields": [{"name": "a", "type": "float", "default": 2.0}],
+        }
+
+        key = 'A"\\B'
+        panel = Panel(funktion, key=key)
+        button_html = html.unescape(panel._case_copy_key_html.value)
+        expected = json.dumps(f'key="{key}"', ensure_ascii=False)
+
+        self.assertIn(f"navigator.clipboard.writeText({expected})", button_html)
 
     def test_spara_till_aktivt_fall_nar_textfalt_ar_tomt(self):
         from an_print import Panel

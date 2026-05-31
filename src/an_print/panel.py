@@ -123,6 +123,7 @@ class Panel:
         self._case_rename_button = None
         self._case_delete_button = None
         self._case_reset_button = None
+        self._case_copy_key_html = None
         self._case_status = None
         self._style = {"description_width": "0px"}
         self._input_layout = self._widgets.Layout(width="70px")
@@ -284,6 +285,7 @@ class Panel:
         self._case_delete_button.on_click(self._on_case_delete_clicked)
         self._case_reset_button = widgets.Button(description="Återställ")
         self._case_reset_button.on_click(self._on_case_reset_clicked)
+        self._case_copy_key_html = widgets.HTML("")
         self._case_status = widgets.HTML("")
 
         controls = widgets.HBox(
@@ -294,6 +296,7 @@ class Panel:
                 self._case_rename_button,
                 self._case_delete_button,
                 self._case_reset_button,
+                self._case_copy_key_html,
                 self._case_status,
             ],
             layout=widgets.Layout(gap="8px", align_items="center", margin="0 0 10px 0"),
@@ -361,6 +364,32 @@ class Panel:
             self._case_delete_button.disabled = active_is_base
         if self._case_reset_button is not None:
             self._case_reset_button.disabled = active_is_base
+        self._refresh_copy_key_button()
+
+    def _refresh_copy_key_button(self):
+        if self._case_copy_key_html is None:
+            return
+        style = (
+            "font: inherit; padding: 3px 8px; border: 1px solid #ccc; "
+            "border-radius: 2px; background: #f7f7f7;"
+        )
+        if not self._case_key:
+            self._case_copy_key_html.value = (
+                f"<button type='button' disabled style='{style} color: #999;'>"
+                "Kopiera Key</button>"
+            )
+            return
+
+        snippet = f'key="{self._case_key}"'
+        js = (
+            f"navigator.clipboard.writeText({json.dumps(snippet, ensure_ascii=False)})"
+            ".then(() => { this.textContent = 'Kopierat'; })"
+            ".catch(() => { this.textContent = 'Kunde inte kopiera'; });"
+        )
+        self._case_copy_key_html.value = (
+            f"<button type='button' style='{style}' onclick=\"{html.escape(js, quote=True)}\">"
+            "Kopiera Key</button>"
+        )
 
     def _on_case_changed(self, change):
         if self._suspend_case_observer:

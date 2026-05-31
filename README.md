@@ -57,7 +57,8 @@ Panel.configure_state_file("26022_smalandsvillan.panel_state.json")
 och tas bort direkt i notebookinterfacet. Skriv ett fallnamn i comboboxen och
 klicka `Spara` for att skriva aktuella indata och redovisningsval till
 state-filen. `Berakna / uppdatera` kor bara berakningen och renderar
-redovisningen.
+redovisningen. For namngivna fall kan `Kopiera Key` anvandas for att kopiera
+ett Python-argument som `key="fall_1"` till urklipp.
 
 Sparade varden ateranvands i nya paneler och skrivs till den konfigurerade
 state-filen, eller defaultfilen `.an_print_panel_state.json` i aktuell
