@@ -302,6 +302,55 @@ class TestPanel(unittest.TestCase):
         row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
         self.assertEqual(row_labels, [["Direkt", "Moment"]])
 
+    def test_visible_if_all_kraver_alla_villkor_och_observerar_alla_falt(self):
+        from an_print import Panel
+
+        def funktion(px):
+            return px
+
+        funktion.panel_schema = {
+            "title": "Test",
+            "px": ["typ", "manuell", "varde"],
+            "fields": [
+                {
+                    "name": "typ",
+                    "type": "choice",
+                    "label": "Typ",
+                    "default": "a",
+                    "options": [{"label": "A", "value": "a"}, {"label": "B", "value": "b"}],
+                },
+                {"name": "manuell", "type": "bool", "label": "Manuell", "default": False, "visible_if": {"field": "typ", "equals": "a"}},
+                {
+                    "name": "varde",
+                    "type": "float",
+                    "label": "Värde",
+                    "default": 1.0,
+                    "visible_if": {
+                        "all": [
+                            {"field": "typ", "equals": "a"},
+                            {"field": "manuell", "equals": True},
+                        ]
+                    },
+                },
+            ],
+        }
+
+        panel = Panel(funktion)
+
+        field_rows = self._field_rows(panel)
+        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
+        self.assertEqual(row_labels, [["Typ", "Manuell"]])
+
+        panel._field_widgets["manuell"].set_value(True)
+        field_rows = self._field_rows(panel)
+        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
+        self.assertEqual(row_labels, [["Typ", "Värde"], ["Manuell"]])
+
+        panel._field_widgets["typ"].set_value("b")
+        field_rows = self._field_rows(panel)
+        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
+        self.assertEqual(row_labels, [["Typ"]])
+
     def test_tom_symbol_visar_inte_faltnamn(self):
         from an_print import Panel
 

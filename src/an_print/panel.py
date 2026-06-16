@@ -647,12 +647,12 @@ class Panel:
             visible_if = field.get("visible_if")
             if not visible_if:
                 continue
-            controller_name = visible_if.get("field")
-            controller = self._field_widgets.get(controller_name)
-            if controller is None:
-                continue
-            if hasattr(controller, "observe"):
-                controller.observe(lambda _change: self._refresh_field_groups(), names="value")
+            for controller_name in self._visible_if_controller_names(visible_if):
+                controller = self._field_widgets.get(controller_name)
+                if controller is None:
+                    continue
+                if hasattr(controller, "observe"):
+                    controller.observe(lambda _change: self._refresh_field_groups(), names="value")
 
     def _refresh_field_groups(self):
         for group in self._scalar_field_groups:
@@ -667,10 +667,21 @@ class Panel:
         visible_if = field.get("visible_if")
         if not visible_if:
             return True
+        if "all" in visible_if:
+            return all(self._field_is_visible({"visible_if": condition}) for condition in visible_if["all"])
         controller = self._field_widgets.get(visible_if.get("field"))
         if controller is None:
             return True
         return self._visible_if_matches(controller.value, visible_if)
+
+    def _visible_if_controller_names(self, visible_if):
+        if "all" in visible_if:
+            names = []
+            for condition in visible_if["all"]:
+                names.extend(self._visible_if_controller_names(condition))
+            return names
+        field_name = visible_if.get("field")
+        return [field_name] if field_name else []
 
     def _visible_if_matches(self, value, visible_if):
         if "equals" in visible_if:
