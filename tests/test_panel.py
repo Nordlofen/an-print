@@ -14,14 +14,31 @@ sys.path.insert(0, str(ROOT / "an-print" / "src"))
 sys.path.insert(0, str(ROOT / "an-calcs" / "src"))
 
 
+class _Layout(dict):
+    def __getattr__(self, name):
+        return self.get(name)
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+
 class _Widget:
     def __init__(self, value=None, description="", children=None, **kwargs):
         self._value = value
         self.description = description
         self.children = list(children or [])
         self.kwargs = kwargs
-        self.layout = kwargs.get("layout", {})
+        self.layout = kwargs.get("layout", _Layout())
+        self._dom_classes = ()
         self._observers = []
+
+    def add_class(self, name):
+        self._dom_classes = tuple(dict.fromkeys((*self._dom_classes, name)))
+        return self
+
+    def remove_class(self, name):
+        self._dom_classes = tuple(item for item in self._dom_classes if item != name)
+        return self
 
     @property
     def value(self):
@@ -125,7 +142,7 @@ class FakeWidgets(types.SimpleNamespace):
             Combobox=_Combobox,
             Output=_Output,
             Accordion=_Accordion,
-            Layout=lambda **kwargs: kwargs,
+            Layout=lambda **kwargs: _Layout(kwargs),
         )
 
 
@@ -156,10 +173,11 @@ class TestPanel(unittest.TestCase):
             sys.modules["ipywidgets"] = self._old_ipywidgets
 
     def _label_text(self, field_row):
-        return re.sub("<[^>]+>", "", field_row.children[0].value)
+        control = field_row.children[0]
+        return re.sub("<[^>]+>", "", control.value) if isinstance(control.value, str) else control.description
 
     def _field_rows(self, panel):
-        return panel.widget.children[1].children[0].children
+        return panel._scalar_field_groups[0]["box"].children
 
     def test_bygger_px_for_allmanna_barighetsekvationen(self):
         from an_calcs.geo import allmanna_barighetsekvationen
@@ -213,20 +231,20 @@ class TestPanel(unittest.TestCase):
         panel._field_widgets["typ"].set_value("VS")
         self.assertTrue(panel._field_widgets["by"].disabled)
         self.assertEqual(panel.to_px(), ["VS", 1.0, 100, 0.1])
-        self.assertEqual(self._label_text(panel._field_rows["F"]), "Linjelast [kN/m]")
-        self.assertIn(panel._field_rows["by"], [row for group in panel._scalar_field_groups for pair in group["box"].children for row in pair.children])
+        self.assertEqual(self._label_text(panel._field_rows["F"]), "Linjelast")
+        self.assertIn(panel._field_rows["by"], [row for group in panel._scalar_field_groups for row in group["box"].children])
         # Även en programmatisk ändring av det låsta fältet normaliseras.
         panel._field_widgets["by"].value = 99
         self.assertEqual(panel.to_px()[1], 1.0)
         panel._field_widgets["typ"].set_value("PS")
         self.assertFalse(panel._field_widgets["by"].disabled)
         self.assertEqual(panel.to_px()[1], 4.2)
-        self.assertEqual(self._label_text(panel._field_rows["F"]), "Kraft [kN]")
+        self.assertEqual(self._label_text(panel._field_rows["F"]), "Kraft")
         self.assertEqual(panel.schema["fields"][2]["unit"], "kN")
 
     def test_faltgrupp_ar_utfallbar_och_ingangsvardet_finns_i_px(self):
         panel = self._panel_med_faltregler()
-        group = panel.widget.children[1].children[-1]
+        group = panel._sections["Inställningar"]
         self.assertIsInstance(group, _Accordion)
         self.assertIsNone(group.selected_index)
         self.assertEqual(group.titles[0], "Inställningar")
@@ -320,7 +338,7 @@ class TestPanel(unittest.TestCase):
         self.assertEqual(calls[1][1], {"visa": True, "etikett": True, "rader": 15})
         self.assertEqual(calls[3][1], {"visa": False, "etikett": True, "rader": 15})
 
-    def test_scalarfalt_laggs_ut_kolumnvis_i_schemaordning(self):
+    def test_scalarfalt_laggs_ut_i_schemaordning_med_flexibel_bredd(self):
         from an_print import Panel
 
         def funktion(px):
@@ -340,18 +358,10 @@ class TestPanel(unittest.TestCase):
 
         panel = Panel(funktion)
         field_rows = self._field_rows(panel)
-        row_labels = []
-        for row in field_rows:
-            row_labels.append([self._label_text(field_row) for field_row in row.children if field_row.children])
-
-        self.assertEqual(row_labels, [["A", "D"], ["B", "E"], ["C"]])
+        self.assertEqual([self._label_text(row) for row in field_rows], ["A", "B", "C", "D", "E"])
         self.assertEqual(panel.to_px(), [1.0, 2.0, 3.0, 4.0, 5.0])
-        first_label = field_rows[0].children[0].children[0]
-        self.assertIn("white-space: normal", first_label.value)
-        self.assertEqual(first_label.layout.get("width"), "210px")
-        self.assertEqual(field_rows[0].children[1].layout.get("width"), "80px")
-        self.assertEqual(field_rows[0].children[0].layout.get("width"), "380px")
-        self.assertEqual(field_rows[0].children[0].children[1].layout.get("width"), "70px")
+        self.assertEqual(panel._field_widgets["a"].description, "A")
+        self.assertEqual(panel._field_widgets["a"].layout.get("width"), "100%")
 
     def test_visible_if_styr_faltrad(self):
         from an_print import Panel
@@ -372,16 +382,16 @@ class TestPanel(unittest.TestCase):
         panel = Panel(funktion)
 
         self.assertEqual(panel._field_widgets["direkt"].kwargs.get("indent"), False)
-        self.assertEqual(panel._field_widgets["direkt"].layout.get("width"), "70px")
+        self.assertEqual(panel._field_widgets["direkt"].layout.get("width"), "100%")
         field_rows = self._field_rows(panel)
-        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
-        self.assertEqual(row_labels, [["Direkt", "Last"]])
+        row_labels = [self._label_text(row) for row in field_rows]
+        self.assertEqual(row_labels, ["Direkt", "Last"])
 
         panel._field_widgets["direkt"].set_value(True)
 
         field_rows = self._field_rows(panel)
-        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
-        self.assertEqual(row_labels, [["Direkt", "Moment"]])
+        row_labels = [self._label_text(row) for row in field_rows]
+        self.assertEqual(row_labels, ["Direkt", "Moment"])
 
     def test_visible_if_all_kraver_alla_villkor_och_observerar_alla_falt(self):
         from an_print import Panel
@@ -419,18 +429,18 @@ class TestPanel(unittest.TestCase):
         panel = Panel(funktion)
 
         field_rows = self._field_rows(panel)
-        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
-        self.assertEqual(row_labels, [["Typ", "Manuell"]])
+        row_labels = [self._label_text(row) for row in field_rows]
+        self.assertEqual(row_labels, ["Typ", "Manuell"])
 
         panel._field_widgets["manuell"].set_value(True)
         field_rows = self._field_rows(panel)
-        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
-        self.assertEqual(row_labels, [["Typ", "Värde"], ["Manuell"]])
+        row_labels = [self._label_text(row) for row in field_rows]
+        self.assertEqual(row_labels, ["Typ", "Manuell", "Värde"])
 
         panel._field_widgets["typ"].set_value("b")
         field_rows = self._field_rows(panel)
-        row_labels = [[self._label_text(field_row) for field_row in row.children if field_row.children] for row in field_rows]
-        self.assertEqual(row_labels, [["Typ"]])
+        row_labels = [self._label_text(row) for row in field_rows]
+        self.assertEqual(row_labels, ["Typ"])
 
     def test_tom_symbol_visar_inte_faltnamn(self):
         from an_print import Panel
@@ -447,9 +457,10 @@ class TestPanel(unittest.TestCase):
         }
 
         panel = Panel(funktion)
-        field_row = self._field_rows(panel)[0].children[0]
+        field_row = self._field_rows(panel)[0]
 
-        self.assertEqual(field_row.children[1].value, "<span style='display: inline-block; padding-left: 8px;'></span>")
+        self.assertEqual(len(field_row.children), 1)
+        self.assertEqual(field_row.children[0].description, "Flagga")
 
     def test_funktion_utan_schema_ger_tydligt_fel(self):
         from an_print import Panel
@@ -819,7 +830,8 @@ class TestPanel(unittest.TestCase):
 
         self.assertNotIn("<button type='button' class='an-print-copy-key-button' disabled", button_html)
         self.assertIn("navigator.clipboard.writeText", button_html)
-        self.assertIn("an-print-copy-key-button:active", button_html)
+        from an_print._panel_style import PANEL_CSS
+        self.assertIn(".anp-panel .an-print-copy-key-button:active", PANEL_CSS)
         self.assertIn("an-print-copy-key-clicked", button_html)
         self.assertIn("setTimeout", button_html)
         self.assertIn('key=\\"B1\\"', button_html)

@@ -2,6 +2,14 @@ import html
 import json
 from pathlib import Path
 
+from ._panel_style import PANEL_CSS
+
+
+def _styled(widget, *classes):
+    for name in classes:
+        widget.add_class(name)
+    return widget
+
 
 class Panel:
     """
@@ -37,11 +45,11 @@ class Panel:
     Det gor att ett nytt berakningsfall kan starta som kopia av foregaende
     panel for samma funktion, men far egen state nar anvandaren sparar.
 
-    Panelen visar en fallrad med en combobox och knapparna ``Spara``,
+    Avsnittet Beräkningsfall innehåller en vallista och knapparna ``Spara``,
     ``Byt namn`` och ``Ta bort``. Skriv ett nytt fallnamn och klicka
     ``Spara`` for att skapa ett nytt sparat fall fran aktuella indata.
-    Valj ett befintligt fall i comboboxen for att ladda det. ``Byt namn``
-    flyttar aktivt fall till det namn som star i comboboxen.
+    Välj ett befintligt fall i listan för att ladda det. ``Byt namn``
+    flyttar aktivt fall till det namn som står i fältet Namn.
 
     Faltvarden sparas i en JSON-fil nar anvandaren klickar ``Spara``.
     ``Berakna / uppdatera`` kor berakningen och renderar redovisning utan att
@@ -115,6 +123,9 @@ class Panel:
         self._field_widgets = {}
         self._field_rows = {}
         self._scalar_field_groups = []
+        self._sections = {}
+        self._section_records = []
+        self._summaries = []
         self._fixed_values = {}
         self._refreshing_field_rules = False
         self._table_widgets = {}
@@ -128,9 +139,7 @@ class Panel:
         self._case_copy_key_html = None
         self._case_status = None
         self._style = {"description_width": "0px"}
-        self._input_layout = self._widgets.Layout(width="70px")
-        self._label_layout = self._widgets.Layout(width="210px")
-        self._symbol_layout = self._widgets.Layout(width="70px")
+        self._input_layout = self._widgets.Layout(width="100%", min_width="0")
         self.widget = self._build_widget()
         self._attach_autosave_observers()
 
@@ -249,32 +258,25 @@ class Panel:
     def _build_widget(self):
         widgets = self._widgets
         title = self.schema.get("title") or getattr(self.funktion, "__name__", "Panel")
-        children = [self._build_header_box(title)]
-        children.append(self._build_fields_box())
-        children.append(self._build_blocks_box())
-
-        self._button = widgets.Button(description="Beräkna / uppdatera", button_style="primary")
+        header = self._build_header_box(title)
+        self._fields_box = self._build_fields_box()
+        blocks = self._build_blocks_box()
+        self._button = _styled(widgets.Button(description="Beräkna / uppdatera"), "anp-calculate")
         self._button.on_click(self._on_calculate_clicked)
-        children.append(self._button)
-        self._output = widgets.Output()
-        children.append(self._output)
-        return widgets.VBox(children)
+        footer = _styled(widgets.HBox([self._button, self._case_status]), "anp-footer")
+        self._form = _styled(widgets.VBox([header, self._fields_box, blocks, footer]), "anp-panel")
+        self._output = _styled(widgets.Output(), "anp-output")
+        self._refresh_summaries()
+        return _styled(widgets.VBox([
+            _styled(widgets.HTML(PANEL_CSS), "anp-style"), self._form, self._output,
+        ]), "anp-root")
 
     def _build_header_box(self, title):
         widgets = self._widgets
         self._case_copy_key_html = widgets.HTML("")
-        self._case_status = widgets.HTML("")
-
-        title_row = widgets.HBox(
-            [widgets.HTML(f"<h3 style='margin:0;'>{html.escape(title)}</h3>"), self._case_copy_key_html],
-            layout=widgets.Layout(align_items="center", gap="12px", flex_flow="row nowrap"),
-        )
-
-        case_box = self._build_case_box()
-        return widgets.VBox(
-            [title_row, case_box],
-            layout=widgets.Layout(gap="8px", align_items="flex-start", margin="0 0 10px 0"),
-        )
+        self._case_status = _styled(widgets.HTML(""), "anp-case-status")
+        heading = _styled(widgets.HTML(f"<h3>{html.escape(title)}</h3>"), "anp-title")
+        return widgets.VBox([heading, self._build_case_box()])
 
     def _build_case_box(self):
         widgets = self._widgets
@@ -282,22 +284,14 @@ class Panel:
         options = self._case_options()
         if active_case not in options:
             options.append(active_case)
-        self._case_combo = widgets.Dropdown(
-            value=active_case,
-            options=options,
-            description="",
-            layout=widgets.Layout(width="230px"),
-        )
+        self._case_combo = _styled(widgets.Dropdown(
+            value=active_case, options=options, description="Fall", layout=self._input_layout,
+        ), "anp-input")
         self._case_combo.observe(self._on_case_changed, names="value")
-
-        self._case_name_input = widgets.Text(
-            value="",
-            description="",
-            layout=widgets.Layout(width="230px"),
-            style={"description_width": "0px"},
-        )
+        self._case_name_input = _styled(widgets.Text(
+            value="", description="Namn", placeholder="Namn på beräkningsfallet", layout=self._input_layout,
+        ), "anp-input")
         self._case_name_input.observe(self._on_case_name_changed, names="value")
-
         self._case_save_button = widgets.Button(description="Spara")
         self._case_save_button.on_click(self._on_case_save_clicked)
         self._case_rename_button = widgets.Button(description="Byt namn")
@@ -306,37 +300,19 @@ class Panel:
         self._case_delete_button.on_click(self._on_case_delete_clicked)
         self._case_reset_button = widgets.Button(description="Återställ")
         self._case_reset_button.on_click(self._on_case_reset_clicked)
-
-        left_group = widgets.HBox(
-            [
-                widgets.Label("Fall", layout=widgets.Layout(width="42px")),
-                self._case_combo,
-                self._case_name_input,
-            ],
-            layout=widgets.Layout(align_items="center", gap="8px", flex_flow="row nowrap"),
-        )
-
-        button_group = widgets.HBox(
-            [
-                self._case_save_button,
-                self._case_rename_button,
-                self._case_delete_button,
-                self._case_reset_button,
-            ],
-            layout=widgets.Layout(align_items="center", gap="8px", flex_flow="row nowrap"),
-        )
-
-        controls = widgets.HBox(
-            [left_group, button_group, self._case_status],
-            layout=widgets.Layout(
-                gap="12px",
-                align_items="center",
-                margin="0 0 10px 0",
-                flex_flow="row nowrap",
-            ),
-        )
+        fields = self._grid([
+            self._field_row({"name": "fall", "label": "Fall", "symbol": ""}, self._case_combo),
+            self._field_row({"name": "fallnamn", "label": "Namn", "symbol": ""}, self._case_name_input),
+        ], 2)
+        buttons = _styled(widgets.HBox([
+            self._case_save_button, self._case_rename_button, self._case_delete_button,
+            self._case_reset_button, self._case_copy_key_html,
+        ]), "anp-actions")
+        box = self._accordion("Beräkningsfall", widgets.VBox([fields, buttons]), collapsed=True,
+                              summary=lambda: self._case_key or "Inget sparat fall")
+        box.add_class("anp-cases")
         self._refresh_case_controls()
-        return controls
+        return box
 
     def _case_key_from_state_key(self, state_key):
         prefix = f"{self._base_key}:"
@@ -383,9 +359,8 @@ class Panel:
 
     def _set_case_status(self, message):
         if self._case_status is not None:
-            self._case_status.value = (
-                "<span style='color:#555; font-size:12px;'>" + html.escape(message) + "</span>"
-            )
+            self._case_status.value = '<span role="status">' + html.escape(message) + '</span>'
+        self._refresh_summaries()
 
     def _refresh_case_controls(self):
         active_is_base = not self._case_key
@@ -399,39 +374,14 @@ class Panel:
         if self._case_reset_button is not None:
             self._case_reset_button.disabled = active_is_base
         self._refresh_copy_key_button()
+        self._refresh_summaries()
 
     def _refresh_copy_key_button(self):
         if self._case_copy_key_html is None:
             return
-        style = """
-        <style>
-        .an-print-copy-key-button {
-            font: inherit;
-            padding: 3px 8px;
-            border: 1px solid #ccc;
-            border-radius: 2px;
-            background: #f7f7f7;
-            white-space: nowrap;
-            transition: background 120ms ease, border-color 120ms ease,
-                        box-shadow 120ms ease, transform 80ms ease;
-        }
-        .an-print-copy-key-button:active {
-            background: #e0e0e0;
-            transform: translateY(1px);
-            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
-        }
-        .an-print-copy-key-button.an-print-copy-key-clicked {
-            background: #e6f2ff;
-            border-color: #6aa9e9;
-        }
-        .an-print-copy-key-button:disabled {
-            color: #999;
-        }
-        </style>
-        """
         button_class = "an-print-copy-key-button"
         disabled_button = (
-            f"{style}<button type='button' class='{button_class}' disabled>"
+            f"<button type='button' class='{button_class}' disabled>"
             "Kopiera Key</button>"
         )
         if not self._case_key:
@@ -446,7 +396,7 @@ class Panel:
             ".catch(() => {});"
         )
         self._case_copy_key_html.value = (
-            f"{style}<button type='button' class='{button_class}' "
+            f"<button type='button' class='{button_class}' "
             f"onclick=\"{html.escape(js, quote=True)}\">"
             "Kopiera Key</button>"
         )
@@ -592,51 +542,134 @@ class Panel:
         keys.extend(key for key in state if key.startswith(prefix))
         return keys
 
+    def _grid(self, children, columns=2):
+        if columns not in (1, 2, 3):
+            raise ValueError("En panelgrupp måste ha 1, 2 eller 3 kolumner.")
+        return _styled(self._widgets.VBox(children), "anp-grid", f"anp-cols-{columns}")
+
+    def _accordion(self, title, content, collapsed=True, summary=None):
+        widgets = self._widgets
+        accordion = widgets.Accordion(children=[content], selected_index=None if collapsed else 0)
+        accordion.set_title(0, title)
+        box = _styled(widgets.VBox([accordion]), "anp-section")
+        self._sections[title] = accordion
+        if summary is not None:
+            text = _styled(widgets.HTML(""), "anp-section-summary")
+            box.children = (accordion, text)
+            box.add_class("anp-with-summary")
+            self._summaries.append((text, summary))
+        else:
+            text = None
+
+        def refresh_open(_change=None):
+            expanded = accordion.selected_index is not None
+            if expanded:
+                box.add_class("anp-expanded")
+            else:
+                box.remove_class("anp-expanded")
+            if text is not None:
+                text.layout.display = "none" if expanded else None
+
+        accordion.observe(refresh_open, names="selected_index")
+        refresh_open()
+        return box
+
+    def _refresh_summaries(self):
+        for widget, summary in self._summaries:
+            widget.value = html.escape(str(summary() if callable(summary) else summary))
+
+    def _fields_summary(self, names):
+        parts = []
+        fields = {field["name"]: field for field in self.schema.get("fields", [])}
+        for name in names:
+            field = fields[name]
+            if not self._field_is_visible(field) or name not in self._field_widgets:
+                continue
+            value = self._field_widgets[name].value
+            if field.get("type") == "choice":
+                value = next((option["label"] for option in field.get("options", []) if option["value"] == value), value)
+            elif isinstance(value, bool):
+                if not value:
+                    continue
+                value = field.get("label", name)
+            elif isinstance(value, (int, float)):
+                value = f"{value:g}" + (" " + field["unit"] if field.get("unit") else "")
+            parts.append(str(value))
+        return " · ".join(parts)
+
     def _build_fields_box(self):
-        sections = {None: []}
-        for field in self.schema.get("fields", []):
-            sections.setdefault(field.get("group"), []).append(field)
-        rows = self._build_field_section(sections.pop(None))
-        for title, fields in sections.items():
-            content = self._widgets.VBox(self._build_field_section(fields))
-            options = self.schema.get("groups", {}).get(title, {})
-            accordion = self._widgets.Accordion(
-                children=[content], selected_index=None if options.get("collapsed", True) else 0,
-            )
-            accordion.set_title(0, title)
-            rows.append(accordion)
-        fields_box = self._widgets.VBox(rows)
+        fields = {field["name"]: field for field in self.schema.get("fields", [])}
+        sections = self.schema.get("sections")
+        if sections is None:
+            grouped = {None: []}
+            for field in fields.values():
+                grouped.setdefault(field.get("group"), []).append(field["name"])
+            sections = [{"fields": grouped.pop(None)}]
+            for title, names in grouped.items():
+                options = self.schema.get("groups", {}).get(title, {})
+                sections.append({"title": title, "fields": names, "collapsible": True,
+                                 "collapsed": options.get("collapsed", True)})
+        used = set()
+
+        def build(spec):
+            names = spec.get("fields", [])
+            for name in names:
+                if name not in fields or name in used:
+                    raise ValueError(f"Okänt eller upprepat fält i panelens sections: {name!r}.")
+                used.add(name)
+            content = self._widgets.VBox(self._build_field_section([fields[name] for name in names], spec.get("columns", 2)))
+            descendants = list(names)
+            if spec.get("sections"):
+                children = []
+                for subsection in spec["sections"]:
+                    child, child_names = build(subsection)
+                    children.append(child)
+                    descendants.extend(child_names)
+                nested = self._grid(children, min(len(children), spec.get("columns", 2)))
+                nested.add_class("anp-subsections")
+                content.children = (*content.children, nested)
+            title = spec.get("title")
+            if title and spec.get("collapsible", False):
+                summary = spec.get("summary")
+                if spec.get("summary_fields"):
+                    summary = lambda spec=spec: self._fields_summary(spec["summary_fields"])
+                wrapper = self._accordion(title, content, spec.get("collapsed", True), summary)
+            elif title:
+                heading = _styled(self._widgets.HTML(f"<h4>{html.escape(title)}</h4>"), "anp-section-heading")
+                wrapper = _styled(self._widgets.VBox([heading, content]), "anp-section-static")
+            else:
+                wrapper = _styled(content, "anp-section-static", "anp-ungrouped")
+            self._section_records.append({"widget": wrapper, "fields": [fields[name] for name in descendants]})
+            return wrapper, descendants
+
+        rows = [build(spec)[0] for spec in sections]
+        # Older schemas and newly added fields remain usable without layout metadata.
+        remaining = [name for name in fields if name not in used]
+        if remaining:
+            rows.append(build({"fields": remaining})[0])
         self._setup_visibility_rules()
         self._setup_field_rules()
         self._restore_field_rules(self._initial_values)
         self._refresh_field_groups()
-        return fields_box
+        return self._widgets.VBox(rows)
 
-    def _build_field_section(self, fields):
-        widgets = self._widgets
-        rows = []
-        scalar_fields = []
+    def _build_field_section(self, fields, columns=2):
+        rows, scalar_fields = [], []
         for field in fields:
             if field.get("type") == "table":
                 if scalar_fields:
-                    self._add_scalar_field_group(rows, scalar_fields)
+                    self._add_scalar_field_group(rows, scalar_fields, columns)
                     scalar_fields = []
-                table = _TableInput(
-                    widgets,
-                    field,
-                    self._initial_values.get(field["name"]),
-                    on_change=self._mark_dirty,
-                )
+                table = _TableInput(self._widgets, field, self._initial_values.get(field["name"]), on_change=self._mark_dirty)
                 self._table_widgets[field["name"]] = table
                 rows.append(table.widget)
             else:
                 control = self._make_field_widget(field)
                 self._field_widgets[field["name"]] = control
-                field_row = self._field_row(field, control)
-                self._field_rows[field["name"]] = field_row
+                self._field_rows[field["name"]] = self._field_row(field, control)
                 scalar_fields.append(field)
         if scalar_fields:
-            self._add_scalar_field_group(rows, scalar_fields)
+            self._add_scalar_field_group(rows, scalar_fields, columns)
         return rows
 
     def _setup_field_rules(self):
@@ -687,36 +720,30 @@ class Panel:
                     if self._field_is_visible({"visible_if": presentation}):
                         shown.update({key: presentation[key] for key in ("label", "unit", "symbol") if key in presentation})
                     row = self._field_rows[name]
-                    row.children[0].value = self._field_label_html(shown)
-                    row.children[1].value = self._field_symbol(shown)
+                    if field.get("type") != "bool":
+                        row.children[0].value = self._field_label_html(shown)
+                        row.children[1].value = self._field_symbol(shown)
+                    widget.description = self._field_label(shown)
         finally:
             self._refreshing_field_rules = False
 
-    def _add_scalar_field_group(self, rows, fields):
-        group_box = self._widgets.VBox([])
+    def _add_scalar_field_group(self, rows, fields, columns=2):
+        group_box = self._grid([], columns)
         self._scalar_field_groups.append({"box": group_box, "fields": list(fields)})
         rows.append(group_box)
 
-    def _two_column_rows(self, field_rows):
-        widgets = self._widgets
-        rows = []
-        split_index = (len(field_rows) + 1) // 2
-        left_rows = field_rows[:split_index]
-        right_rows = field_rows[split_index:]
-        for index, left_row in enumerate(left_rows):
-            children = [left_row]
-            if index < len(right_rows):
-                children.append(widgets.HTML("", layout=widgets.Layout(width="80px")))
-                children.append(right_rows[index])
-            rows.append(widgets.HBox(children))
-        return rows
-
     def _field_row(self, field, control):
         widgets = self._widgets
-        label = widgets.HTML(self._field_label_html(field), layout=self._label_layout)
-        symbol = widgets.HTML(self._field_symbol(field), layout=self._symbol_layout)
-        row_layout = widgets.Layout(width="380px", align_items="center")
-        return widgets.HBox([label, symbol, control], layout=row_layout)
+        if field.get("type") == "bool":
+            row = widgets.VBox([control])
+        else:
+            label = widgets.HTML(self._field_label_html(field))
+            symbol = widgets.HTML(self._field_symbol(field))
+            row = widgets.VBox([label, symbol, control])
+        _styled(row, "anp-field")
+        if field.get("span") in (2, 3):
+            row.add_class(f"anp-span-{field['span']}")
+        return row
 
     def _setup_visibility_rules(self):
         for field in self.schema.get("fields", []):
@@ -732,12 +759,11 @@ class Panel:
 
     def _refresh_field_groups(self):
         for group in self._scalar_field_groups:
-            visible_rows = [
-                self._field_rows[field["name"]]
-                for field in group["fields"]
-                if self._field_is_visible(field)
-            ]
-            group["box"].children = self._two_column_rows(visible_rows)
+            group["box"].children = [self._field_rows[field["name"]] for field in group["fields"] if self._field_is_visible(field)]
+        for record in self._section_records:
+            visible = any(self._field_is_visible(field) for field in record["fields"])
+            record["widget"].layout.display = None if visible else "none"
+        self._refresh_summaries()
 
     def _field_is_visible(self, field):
         visible_if = field.get("visible_if")
@@ -772,60 +798,29 @@ class Panel:
 
     def _build_blocks_box(self):
         widgets = self._widgets
-        rows = [widgets.HTML("<b>Redovisning</b>")]
+        rows = [_styled(widgets.HBox([widgets.Label(label) for label in ("Avsnitt", "Visa", "Etikett", "Rader")]), "anp-report-row", "anp-report-header")]
         block_defaults = self.schema.get("blocks", {})
         saved_blocks = self._initial_values.get("__blocks__", {})
         for name in ("MB", "ID", "DR", "EKV", "SR"):
             defaults = dict(self.DEFAULT_BLOCKS[name])
             defaults.update(block_defaults.get(name, {}))
             defaults.update(saved_blocks.get(name, {}))
-
-            visa = widgets.Checkbox(
-                value=bool(defaults.get("visa", False)),
-                description="",
-                indent=False,
-                layout=widgets.Layout(width="28px"),
-            )
+            title = self.BLOCK_LABELS[name]
+            visa = _styled(widgets.Checkbox(value=bool(defaults.get("visa", False)), description=f"Visa {title}", indent=False), "anp-check")
             block = {"visa": visa}
-            controls = [
-                widgets.Label(self.BLOCK_LABELS[name], layout=widgets.Layout(width="210px")),
-                visa,
-                widgets.Label("visa", layout=widgets.Layout(width="52px")),
-            ]
+            controls = [widgets.Label(title), visa]
             if name != "MB":
-                etikett = widgets.Checkbox(
-                    value=bool(defaults.get("etikett", True)),
-                    description="",
-                    indent=False,
-                    layout=widgets.Layout(width="28px"),
-                )
-                rader = widgets.IntText(
-                    value=int(defaults.get("rader", 10)),
-                    description="",
-                    layout=widgets.Layout(width="70px"),
-                    style={"description_width": "0px"},
-                )
+                etikett = _styled(widgets.Checkbox(value=bool(defaults.get("etikett", True)), description=f"Etikett {title}", indent=False), "anp-check")
+                rader = _styled(widgets.IntText(value=int(defaults.get("rader", 10)), description=f"Rader {title}", layout=self._input_layout), "anp-input")
                 block.update({"etikett": etikett, "rader": rader})
-                controls.extend(
-                    [
-                        etikett,
-                        widgets.Label("etikett", layout=widgets.Layout(width="70px")),
-                        widgets.Label("rader", layout=widgets.Layout(width="48px")),
-                        rader,
-                    ]
-                )
+                controls.extend([etikett, rader])
             else:
-                controls.extend(
-                    [
-                        widgets.Label("", layout=widgets.Layout(width="32px")),
-                        widgets.Label("", layout=widgets.Layout(width="70px")),
-                        widgets.Label("", layout=widgets.Layout(width="48px")),
-                        widgets.Label("", layout=widgets.Layout(width="70px")),
-                    ]
-                )
+                controls.extend([widgets.Label(""), widgets.Label("")])
             self._block_widgets[name] = block
-            rows.append(widgets.HBox(controls, layout=widgets.Layout(gap="8px", align_items="center")))
-        return widgets.VBox(rows, layout=widgets.Layout(width="650px"))
+            rows.append(_styled(widgets.HBox(controls), "anp-report-row"))
+        return self._accordion("Redovisning", widgets.VBox(rows), collapsed=True, summary=lambda: " · ".join(
+            self.BLOCK_LABELS[name].split(" - ", 1)[-1] for name, block in self._block_widgets.items() if block["visa"].value
+        ) or "Inga avsnitt valda")
 
     def _field_label(self, field):
         unit = field.get("unit", "")
@@ -833,21 +828,21 @@ class Panel:
         return f"{label} [{unit}]" if unit else label
 
     def _field_label_html(self, field):
-        label = html.escape(self._field_label(field))
-        return (
-            "<div style='white-space: normal; overflow: visible; "
-            "line-height: 1.25; padding-right: 8px;'>"
-            f"{label}</div>"
-        )
+        label = html.escape(field.get("display_label", field.get("label", field["name"])))
+        return f'<div class="anp-field-label">{label}</div>'
 
     def _field_symbol(self, field):
-        if "symbol" in field:
-            symbol = field["symbol"]
-        else:
-            symbol = field.get("latex") or field.get("name", "")
-        return f"<span style='display: inline-block; padding-left: 8px;'>{symbol}</span>"
+        symbol = field.get("symbol", field.get("latex", field.get("name", "")))
+        unit = html.escape(field.get("unit", ""))
+        text = " ".join(part for part in (symbol, f"[{unit}]" if unit else "") if part)
+        return f'<div class="anp-field-meta">{text}</div>' if text else ""
 
     def _make_field_widget(self, field):
+        control = self._create_field_widget(field)
+        control.description = self._field_label(field)
+        return _styled(control, "anp-check" if field.get("type") == "bool" else "anp-input")
+
+    def _create_field_widget(self, field):
         widgets = self._widgets
         field_type = field.get("type", "float")
         default = self._initial_values.get(field["name"], field.get("default"))
@@ -903,7 +898,8 @@ class Panel:
                     widget.observe(lambda _change: self._mark_dirty(), names="value")
 
     def _mark_dirty(self):
-        self._set_case_status("Osparat")
+        if not self._suspend_case_observer:
+            self._set_case_status("Osparat")
 
     def _on_calculate_clicked(self, _button):
         self._output.clear_output()
@@ -1020,7 +1016,7 @@ class _TableInput:
         self.widgets = widgets
         self.field = field
         self.on_change = on_change
-        self._input_layout = widgets.Layout(width="120px")
+        self._input_layout = widgets.Layout(width="100%", min_width="0")
         self._style = {"description_width": "0px"}
         self.rows_box = widgets.VBox([])
         self.rows = []
@@ -1029,24 +1025,26 @@ class _TableInput:
         for row in defaults:
             self.add_row(row)
 
+    def _row_layout(self):
+        count = len(self.field.get("columns", []))
+        return self.widgets.Layout(display="grid", grid_template_columns=f"28px repeat({count}, minmax(0, 1fr)) 70px")
+
     def _build_widget(self):
         widgets = self.widgets
-        title = self.field.get("label", self.field["name"])
-        add_button = widgets.Button(description="+ Lägg till rad", layout=widgets.Layout(width="150px"))
+        title = html.escape(self.field.get("label", self.field["name"]))
+        add_button = _styled(widgets.Button(description=self.field.get("add_label", "+ Lägg till rad")), "anp-table-add")
         add_button.on_click(lambda _button: self.add_row({}))
-        header = self._header_row()
-        return widgets.VBox(
-            [widgets.HTML(f"<b>{title}</b>"), header, self.rows_box, add_button],
-            layout=widgets.Layout(margin="10px 0 12px 0"),
-        )
+        scroll = _styled(widgets.VBox([self._header_row(), self.rows_box]), "anp-table-scroll")
+        heading = _styled(widgets.HTML(f"<h4>{title}</h4>"), "anp-section-heading")
+        return _styled(widgets.VBox([heading, scroll, add_button]), "anp-table")
 
     def _header_row(self):
         widgets = self.widgets
-        cells = [widgets.Label("", layout=widgets.Layout(width="34px"))]
+        cells = [widgets.Label("Nr")]
         for column in self.field.get("columns", []):
-            cells.append(widgets.HTML(self._column_header(column), layout=widgets.Layout(width="120px")))
-        cells.append(widgets.Label("", layout=widgets.Layout(width="86px")))
-        return widgets.HBox(cells, layout=widgets.Layout(gap="8px"))
+            cells.append(widgets.HTML(self._column_header(column)))
+        cells.append(widgets.Label(""))
+        return _styled(widgets.HBox(cells, layout=self._row_layout()), "anp-table-row", "anp-table-header")
 
     def add_row(self, values):
         widgets = self.widgets
@@ -1058,7 +1056,7 @@ class _TableInput:
                 control.observe(lambda _change: self._notify_change(), names="value")
             controls[column["name"]] = control
 
-        remove_button = widgets.Button(description="Ta bort", layout=widgets.Layout(width="86px"))
+        remove_button = widgets.Button(description="Ta bort")
         row = {"controls": controls, "widget": None}
         remove_button.on_click(lambda _button, row=row: self.remove_row(row))
         row["remove_button"] = remove_button
@@ -1076,15 +1074,14 @@ class _TableInput:
 
     def _make_row_widget(self, row):
         widgets = self.widgets
-        row_number = self.rows.index(row) + 1 if row in self.rows else len(self.rows) + 1
-        cells = [widgets.Label(str(row_number), layout=widgets.Layout(width="34px"))]
+        cells = [widgets.Label("")]
         for column in self.field.get("columns", []):
             cells.append(row["controls"][column["name"]])
         cells.append(row["remove_button"])
-        return widgets.HBox(cells, layout=widgets.Layout(gap="8px", align_items="center"))
+        return _styled(widgets.HBox(cells, layout=self._row_layout()), "anp-table-row")
 
     def remove_row(self, row):
-        if row in self.rows:
+        if row in self.rows and len(self.rows) > 1:
             self.rows.remove(row)
             self._refresh_rows()
             self._notify_change()
@@ -1094,8 +1091,12 @@ class _TableInput:
             self.on_change()
 
     def _refresh_rows(self):
-        for row in self.rows:
-            row["widget"] = self._make_row_widget(row)
+        for index, row in enumerate(self.rows, 1):
+            row["widget"].children[0].value = str(index)
+            row["remove_button"].disabled = len(self.rows) == 1
+            row["remove_button"].tooltip = f"Ta bort rad {index}"
+            for column in self.field.get("columns", []):
+                row["controls"][column["name"]].description = f"{self._column_label(column)}, rad {index}"
         self.rows_box.children = [row["widget"] for row in self.rows]
 
     def _column_label(self, column):
@@ -1105,10 +1106,15 @@ class _TableInput:
 
     def _column_header(self, column):
         symbol = column.get("symbol") or column.get("latex") or column.get("name", "")
-        label = self._column_label(column)
-        return f"<span>{symbol}</span><br><span>{label}</span>"
+        label = html.escape(column.get("label", column["name"]))
+        unit = html.escape(column.get("unit", ""))
+        return f"<span>{label}</span><br><span>{symbol} [{unit}]</span>" if unit else f"<span>{label}</span><br><span>{symbol}</span>"
 
     def _make_column_widget(self, column, default):
+        control = self._create_column_widget(column, default)
+        return _styled(control, "anp-check" if column.get("type") == "bool" else "anp-input")
+
+    def _create_column_widget(self, column, default):
         widgets = self.widgets
         column_type = column.get("type", "float")
         if column_type == "float":

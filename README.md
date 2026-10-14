@@ -58,8 +58,8 @@ from an_print import Panel
 Panel.configure_state_file("26022_smalandsvillan.panel_state.json")
 ```
 
-`Panel` har en fallrad dar berakningsfall kan valjas, skapas, bytas namn pa
-och tas bort direkt i notebookinterfacet. Skriv ett fallnamn i comboboxen och
+`Panel` har ett öppningsbart avsnitt **Beräkningsfall**, där fall kan väljas,
+skapas, bytas namn på och tas bort. Skriv ett fallnamn i fältet **Namn** och
 klicka `Spara` for att skriva aktuella indata och redovisningsval till
 state-filen. `Berakna / uppdatera` kor bara berakningen och renderar
 redovisningen. For namngivna fall kan `Kopiera Key` anvandas for att kopiera
@@ -114,6 +114,36 @@ villkoret upphör. Båda värdena följer med sparade beräkningsfall.
 och `symbol`, exempelvis från kraft i kN till linjelast i kN/m.
 Villkoren stöder samma `equals`, `not_equals`, `in`, `not_in` och `all`
 som `visible_if`.
+
+Alla paneler använder samma formgivning med etiketter över fälten, anpassningsbara
+kolumnbredder och en separat, fullbred yta för beräkningsresultaten. Befintliga
+`Panel(funktion, key=...)`-anrop och sparade JSON-fall fungerar som tidigare.
+**Beräkningsfall** och **Redovisning** är stängda från början och öppnas via rubriken.
+
+För anpassad gruppering kan schemat ange `sections`. Varje avsnitt kan ha
+`title`, `fields` (fältnamn i visningsordning), `columns` (1–3),
+`collapsible`, `collapsed` och en kort `summary` eller `summary_fields`.
+Underavsnitt anges med en inre `sections`-lista, exempelvis för Del 1 och Del 2
+sida vid sida. `px` bestämmer alltid ordningen för beräkningsindata, oberoende
+av fältens visuella placering. Fält som saknas i avsnitten visas sist;
+okända eller upprepade fältnamn avvisas.
+
+```python
+funktion.panel_schema["sections"] = [
+    {"title": "Geometri", "fields": ["bx", "by"], "columns": 2},
+    {"title": "Inställningar", "fields": ["t_skikt"],
+     "collapsible": True, "collapsed": True},
+]
+```
+
+Ett fält kan ange `span: 2` för större bredd och `display_label` för en kortare
+synlig etikett inom en namngiven grupp. Den fullständiga `label` används fortsatt
+för tillgänglighetsnamnet. Tabeller kan ange `add_label` för knappen som lägger
+till en rad. Den sista tabellraden behålls alltid.
+
+Avsnitt och fält följer `visible_if` även efter fallbyte. Att stänga ett avsnitt
+behåller dess värden. Stilen är avgränsad till panelen och följer JupyterLabs
+ljusa eller mörka tema. Inga nya notebooktillägg behöver installeras.
 
 Fält med `group` samlas efter de vanliga fälten i ett utfällbart avsnitt.
 Gruppens namn blir rubrik. `panel_schema["groups"]` kan ange exempelvis
