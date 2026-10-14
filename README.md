@@ -101,6 +101,20 @@ och ska vara ren Python-data utan widgetimporter.
 - `choice`
 - `table`
 
+Ett skalärt fält kan ha `fixed_if` för att visa ett låst värde när ett
+villkor gäller. Exempel: `{"field": "typ", "equals": "VS", "value": 1.0}`.
+Fältet ligger kvar synligt och återfår sitt tidigare redigerbara värde när
+villkoret upphör. Båda värdena följer med sparade beräkningsfall.
+`presentation_if` använder samma villkor och kan ändra `label`, `unit`
+och `symbol`, exempelvis från kraft i kN till linjelast i kN/m.
+Villkoren stöder samma `equals`, `not_equals`, `in`, `not_in` och `all`
+som `visible_if`.
+
+Fält med `group` samlas efter de vanliga fälten i ett utfällbart avsnitt.
+Gruppens namn blir rubrik. `panel_schema["groups"]` kan ange exempelvis
+`{"Beräkningsinställningar": {"collapsed": True}}`. Gruppfälten finns
+alltid med i `px`, även när avsnittet är stängt.
+
 Redovisningsdelen i `Panel` ar blockspecifik och motsvarar anropen till
 `CalcBlock.MB`, `CalcBlock.ID`, `CalcBlock.DR`, `CalcBlock.EKV` och
 `CalcBlock.SR`.

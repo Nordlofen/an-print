@@ -91,6 +91,16 @@ class _Combobox(_Dropdown):
     pass
 
 
+class _Accordion(_Widget):
+    def __init__(self, children=None, selected_index=None, **kwargs):
+        super().__init__(children=children, **kwargs)
+        self.selected_index = selected_index
+        self.titles = {}
+
+    def set_title(self, index, title):
+        self.titles[index] = title
+
+
 class FakeWidgets(types.SimpleNamespace):
     def __init__(self):
         super().__init__(
@@ -114,6 +124,7 @@ class FakeWidgets(types.SimpleNamespace):
             Dropdown=_Dropdown,
             Combobox=_Combobox,
             Output=_Output,
+            Accordion=_Accordion,
             Layout=lambda **kwargs: kwargs,
         )
 
@@ -174,6 +185,76 @@ class TestPanel(unittest.TestCase):
         self.assertEqual(px[2], [1.0, 1.0])
         self.assertEqual(px[3], [10.0, 15.0])
         self.assertEqual(px[4], [1.0, 1.0])
+
+    def _panel_med_faltregler(self, key=None):
+        from an_print import Panel
+
+        def funktion(px):
+            return {}
+
+        funktion.panel_schema = {
+            "px": ["typ", "by", "F", "t"],
+            "groups": {"Inställningar": {"collapsed": True}},
+            "fields": [
+                {"name": "typ", "type": "choice", "default": "PS", "options": [
+                    {"label": "PS", "value": "PS"}, {"label": "VS", "value": "VS"}]},
+                {"name": "by", "type": "float", "default": 2.7,
+                 "fixed_if": {"field": "typ", "equals": "VS", "value": 1.0}},
+                {"name": "F", "type": "float", "label": "Kraft", "unit": "kN", "default": 100,
+                 "presentation_if": {"field": "typ", "equals": "VS", "label": "Linjelast", "unit": "kN/m"}},
+                {"name": "t", "type": "float", "default": 0.1, "group": "Inställningar"},
+            ],
+        }
+        return Panel(funktion, key=key)
+
+    def test_lasttyp_laser_falt_och_aterstaller_tidigare_varde(self):
+        panel = self._panel_med_faltregler()
+        panel._field_widgets["by"].set_value(4.2)
+        panel._field_widgets["typ"].set_value("VS")
+        self.assertTrue(panel._field_widgets["by"].disabled)
+        self.assertEqual(panel.to_px(), ["VS", 1.0, 100, 0.1])
+        self.assertEqual(self._label_text(panel._field_rows["F"]), "Linjelast [kN/m]")
+        self.assertIn(panel._field_rows["by"], [row for group in panel._scalar_field_groups for pair in group["box"].children for row in pair.children])
+        # Även en programmatisk ändring av det låsta fältet normaliseras.
+        panel._field_widgets["by"].value = 99
+        self.assertEqual(panel.to_px()[1], 1.0)
+        panel._field_widgets["typ"].set_value("PS")
+        self.assertFalse(panel._field_widgets["by"].disabled)
+        self.assertEqual(panel.to_px()[1], 4.2)
+        self.assertEqual(self._label_text(panel._field_rows["F"]), "Kraft [kN]")
+        self.assertEqual(panel.schema["fields"][2]["unit"], "kN")
+
+    def test_faltgrupp_ar_utfallbar_och_ingangsvardet_finns_i_px(self):
+        panel = self._panel_med_faltregler()
+        group = panel.widget.children[1].children[-1]
+        self.assertIsInstance(group, _Accordion)
+        self.assertIsNone(group.selected_index)
+        self.assertEqual(group.titles[0], "Inställningar")
+        panel._field_widgets["t"].set_value(0.05)
+        self.assertEqual(panel.to_px()[-1], 0.05)
+
+    def test_last_falt_bevarar_fritt_varde_vid_omladdning_och_fallbyte(self):
+        from an_print import Panel
+
+        panel = self._panel_med_faltregler(key="A")
+        panel._field_widgets["by"].set_value(4.2)
+        panel._field_widgets["typ"].set_value("VS")
+        panel._save_last_values()
+        Panel._LAST_VALUES.clear()
+        Panel._LAST_BY_FUNCTION.clear()
+        loaded = self._panel_med_faltregler(key="A")
+        self.assertTrue(loaded._field_widgets["by"].disabled)
+        self.assertEqual(loaded.to_px()[1], 1)
+        loaded._field_widgets["typ"].set_value("PS")
+        self.assertEqual(loaded.to_px()[1], 4.2)
+        saved_a = panel._collect_values()
+        loaded._apply_values({"typ": "PS", "by": 6.0, "F": 200, "t": 0.2})
+        self.assertFalse(loaded._field_widgets["by"].disabled)
+        self.assertEqual(loaded.to_px(), ["PS", 6.0, 200, 0.2])
+        loaded._apply_values(saved_a)
+        self.assertTrue(loaded._field_widgets["by"].disabled)
+        loaded._field_widgets["typ"].set_value("PS")
+        self.assertEqual(loaded.to_px()[1], 4.2)
 
     def test_calculate_sparar_resultat_och_anropar_calcblock(self):
         import an_print.calcblock as calcblock_module

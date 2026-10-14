@@ -115,6 +115,8 @@ class Panel:
         self._field_widgets = {}
         self._field_rows = {}
         self._scalar_field_groups = []
+        self._fixed_values = {}
+        self._refreshing_field_rules = False
         self._table_widgets = {}
         self._block_widgets = {}
         self._case_combo = None
@@ -276,9 +278,13 @@ class Panel:
 
     def _build_case_box(self):
         widgets = self._widgets
+        active_case = self._case_display_from_state_key(self._last_key)
+        options = self._case_options()
+        if active_case not in options:
+            options.append(active_case)
         self._case_combo = widgets.Dropdown(
-            value=self._case_display_from_state_key(self._last_key),
-            options=self._case_options(),
+            value=active_case,
+            options=options,
             description="",
             layout=widgets.Layout(width="230px"),
         )
@@ -587,10 +593,30 @@ class Panel:
         return keys
 
     def _build_fields_box(self):
+        sections = {None: []}
+        for field in self.schema.get("fields", []):
+            sections.setdefault(field.get("group"), []).append(field)
+        rows = self._build_field_section(sections.pop(None))
+        for title, fields in sections.items():
+            content = self._widgets.VBox(self._build_field_section(fields))
+            options = self.schema.get("groups", {}).get(title, {})
+            accordion = self._widgets.Accordion(
+                children=[content], selected_index=None if options.get("collapsed", True) else 0,
+            )
+            accordion.set_title(0, title)
+            rows.append(accordion)
+        fields_box = self._widgets.VBox(rows)
+        self._setup_visibility_rules()
+        self._setup_field_rules()
+        self._restore_field_rules(self._initial_values)
+        self._refresh_field_groups()
+        return fields_box
+
+    def _build_field_section(self, fields):
         widgets = self._widgets
         rows = []
         scalar_fields = []
-        for field in self.schema.get("fields", []):
+        for field in fields:
             if field.get("type") == "table":
                 if scalar_fields:
                     self._add_scalar_field_group(rows, scalar_fields)
@@ -611,10 +637,60 @@ class Panel:
                 scalar_fields.append(field)
         if scalar_fields:
             self._add_scalar_field_group(rows, scalar_fields)
-        fields_box = widgets.VBox(rows)
-        self._setup_visibility_rules()
-        self._refresh_field_groups()
-        return fields_box
+        return rows
+
+    def _setup_field_rules(self):
+        controllers = set()
+        for field in self.schema.get("fields", []):
+            for key in ("fixed_if", "presentation_if"):
+                if field.get(key):
+                    controllers.update(self._visible_if_controller_names(field[key]))
+        for name in controllers:
+            controller = self._field_widgets.get(name)
+            if controller is not None and hasattr(controller, "observe"):
+                controller.observe(lambda _change: self._refresh_field_rules(), names="value")
+
+    def _restore_field_rules(self, values):
+        # Ett sparat låst fält innehåller sitt effektiva värde. Det tidigare
+        # redigerbara värdet sparas separat och hör till respektive fall.
+        self._fixed_values = {}
+        remembered = values.get("__unfixed_values__", {})
+        for field in self.schema.get("fields", []):
+            rule = field.get("fixed_if")
+            name = field["name"]
+            if rule and name in self._field_widgets and self._field_is_visible({"visible_if": rule}):
+                self._fixed_values[name] = remembered.get(name, self._field_widgets[name].value)
+        self._refresh_field_rules()
+
+    def _refresh_field_rules(self):
+        if self._refreshing_field_rules or self._suspend_case_observer:
+            return
+        self._refreshing_field_rules = True
+        try:
+            for field in self.schema.get("fields", []):
+                name = field["name"]
+                widget = self._field_widgets.get(name)
+                if widget is None:
+                    continue
+                fixed = field.get("fixed_if")
+                if fixed:
+                    active = self._field_is_visible({"visible_if": fixed})
+                    if active:
+                        self._fixed_values.setdefault(name, widget.value)
+                        widget.value = fixed["value"]
+                    elif name in self._fixed_values:
+                        widget.value = self._fixed_values.pop(name)
+                    widget.disabled = active
+                presentation = field.get("presentation_if")
+                if presentation:
+                    shown = dict(field)
+                    if self._field_is_visible({"visible_if": presentation}):
+                        shown.update({key: presentation[key] for key in ("label", "unit", "symbol") if key in presentation})
+                    row = self._field_rows[name]
+                    row.children[0].value = self._field_label_html(shown)
+                    row.children[1].value = self._field_symbol(shown)
+        finally:
+            self._refreshing_field_rules = False
 
     def _add_scalar_field_group(self, rows, fields):
         group_box = self._widgets.VBox([])
@@ -843,6 +919,7 @@ class Panel:
                     print(exc)
 
     def to_px(self):
+        self._refresh_field_rules()
         values = {}
         for name, widget in self._field_widgets.items():
             values[name] = widget.value
@@ -874,12 +951,15 @@ class Panel:
         self._set_case_status("Sparat")
 
     def _collect_values(self):
+        self._refresh_field_rules()
         values = {}
         for name, widget in self._field_widgets.items():
             values[name] = widget.value
         for name, table in self._table_widgets.items():
             values[name] = table.rows_as_values()
         values["__blocks__"] = self._block_values()
+        if self._fixed_values:
+            values["__unfixed_values__"] = dict(self._fixed_values)
         return values
 
     def _apply_values(self, values):
@@ -907,6 +987,7 @@ class Panel:
             self._refresh_field_groups()
         finally:
             self._suspend_case_observer = False
+        self._restore_field_rules(values)
         self._refresh_case_controls()
 
     def _block_values(self):
