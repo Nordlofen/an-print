@@ -43,9 +43,8 @@ class CalcBlock:
             str
                 Escapad text.
         """
-        escaped = str(text)
         replacements = {
-            "\\": r"\textbackslash{}",
+            "\\": r"$\backslash$",
             "&": r"\&",
             "%": r"\%",
             "$": r"\$",
@@ -53,10 +52,13 @@ class CalcBlock:
             "_": r"\_",
             "{": r"\{",
             "}": r"\}",
+            "^": r"$\hat{}$",
+            "~": r"$\sim$",
+            "·": r"$\cdot$",
         }
-        for old, new in replacements.items():
-            escaped = escaped.replace(old, new)
-        return escaped
+        # MathJax utan textmacros och KaTeX stöder matematik inuti text.
+        # Escapa bara originaltecknen, inte de nyinsatta kommandona.
+        return "".join(replacements.get(char, char) for char in str(text))
 
     def _escape_html(self, text):
         """
@@ -336,6 +338,20 @@ class CalcBlock:
         mantissa_str = self._escape_html(f"{mantissa:.{decimals}f}")
         return f'{mantissa_str} &middot; 10<sup>{exponent}</sup>'
 
+    def _unit_parts(self, unit):
+        """Dela texten vid numeriska exponenter utan att ta med efterföljande enheter."""
+        import re
+
+        start = 0
+        pattern = r"\^(?:\{([+-]?\d+(?:\.\d+)?)\}|([+-]?\d+(?:\.\d+)?))"
+        for match in re.finditer(pattern, unit):
+            if match.start() > start:
+                yield False, unit[start:match.start()]
+            yield True, match.group(1) or match.group(2)
+            start = match.end()
+        if start < len(unit):
+            yield False, unit[start:]
+
     def _format_unit(self, unit):
         """
         Formaterar enhetstext till LaTeX-vänlig notation.
@@ -351,11 +367,11 @@ class CalcBlock:
         if not unit:
             return ""
 
-        if "^" in unit:
-            bas, exponent = unit.split("^", 1)
-            return r"\tiny{[\mathrm{" + bas + "}^{"+ exponent + "}]} "
-
-        return r"\tiny{[\mathrm{" + unit + "}]} "
+        formatted = "".join(
+            "^{" + value + "}" if exponent else r"\mathrm{" + value + "}"
+            for exponent, value in self._unit_parts(str(unit))
+        )
+        return r"\tiny{[" + formatted + "]} "
 
     def _format_unit_html(self, unit):
         """
@@ -372,11 +388,10 @@ class CalcBlock:
         if not unit:
             return ""
 
-        if "^" in unit:
-            bas, exponent = unit.split("^", 1)
-            unit_html = f"{self._escape_html(bas)}<sup>{self._escape_html(exponent)}</sup>"
-        else:
-            unit_html = self._escape_html(unit)
+        unit_html = "".join(
+            f"<sup>{self._escape_html(value)}</sup>" if exponent else self._escape_html(value)
+            for exponent, value in self._unit_parts(str(unit))
+        )
 
         return f'<span class="anp-data-block__unit">[{unit_html}]</span>'
 
