@@ -10,6 +10,29 @@ from an_print.calcblock import CalcBlock
 
 
 class TestCalcBlock(unittest.TestCase):
+    def test_valbar_potensform_med_decimalstyrning(self):
+        cb = CalcBlock({})
+        item = {"namn": "k", "value": 81945.514, "unit": "kN/m^2/m", "format": "scientific", "decimals": 2}
+        self.assertTrue(cb._format_value(item).startswith(r"8.19 \cdot 10^{4}"))
+        self.assertTrue(cb._format_value_html(item).startswith("8.19 &middot; 10<sup>4</sup>"))
+        self.assertTrue(cb._format_value(item, {"k": 3}).startswith(r"8.195 \cdot 10^{4}"))
+        self.assertTrue(cb._format_value_html(item, {"k": 3}).startswith("8.195 &middot; 10<sup>4</sup>"))
+        # Vanlig decimalform för poster utan uttryckligt formatval.
+        del item["format"]
+        self.assertTrue(cb._format_value(item).startswith("81945.51"))
+        self.assertTrue(cb._format_value_html(item).startswith("81945.51"))
+
+    def test_potensform_normaliseras_vid_avrundning(self):
+        cb = CalcBlock({})
+        for value, mantissa, exponent in [(81995.514, "8.20", 4), (99999, "1.00", 5), (0.00099999, "1.00", -3), (-99999, "-1.00", 5)]:
+            with self.subTest(value=value):
+                self.assertEqual(cb._format_scientific(value, 2), mantissa + r" \cdot 10^{" + str(exponent) + "}")
+                self.assertEqual(cb._format_scientific_html(value, 2), f"{mantissa} &middot; 10<sup>{exponent}</sup>")
+        self.assertEqual(cb._format_scientific(0, 2), "0")
+        self.assertEqual(cb._format_scientific_html(0, 2), "0")
+        # Tidigare automatisk potensform för tröghetsmoment behålls.
+        self.assertTrue(cb._format_value({"value": 1234567, "unit": "mm^4"}).startswith(r"1.235 \cdot 10^{6}"))
+
     def test_etiketter_med_enhetspotens_ar_saker_latextext(self):
         cb = CalcBlock({"ekvationer": {"title": "Ekvationer", "items": [
             {"latex": r"k = \frac{q}{s_m}", "etikett": "bäddmodul i kN/m^2/m"},

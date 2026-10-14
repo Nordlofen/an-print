@@ -29,6 +29,11 @@ cb.SR(visa=True, etikett=True, rader=6)
 `CalcLayout` ansvarar for att arrangera redan byggda block fran ett eller flera
 `CalcBlock`-objekt.
 
+En numerisk datapost kan ange `"format": "scientific"` och `"decimals": 2`
+för tiopotensform med två decimaler i mantissan, exempelvis
+`8.20 · 10^4`. Det gäller både LaTeX och HTML; `value` behåller full precision.
+`decimals` kan även överstyras per post vid anrop av redovisningsblocket.
+
 ## Panel
 
 `Panel` ar ett frivilligt notebooklager ovanpa samma kontrakt. Den ersatter

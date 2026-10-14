@@ -310,10 +310,8 @@ class CalcBlock:
         if value == 0:
             return "0"
 
-        exponent = int(f"{value:e}".split("e")[1])
-        mantissa = value / (10 ** exponent)
-        mantissa_str = f"{mantissa:.{decimals}f}"
-        return mantissa_str + r" \cdot 10^{" + str(exponent) + "}"
+        mantissa, exponent = f"{value:.{decimals}e}".split("e")
+        return mantissa + r" \cdot 10^{" + str(int(exponent)) + "}"
 
     def _format_scientific_html(self, value, decimals=3):
         """
@@ -333,10 +331,8 @@ class CalcBlock:
         if value == 0:
             return "0"
 
-        exponent = int(f"{value:e}".split("e")[1])
-        mantissa = value / (10 ** exponent)
-        mantissa_str = self._escape_html(f"{mantissa:.{decimals}f}")
-        return f'{mantissa_str} &middot; 10<sup>{exponent}</sup>'
+        mantissa, exponent = f"{value:.{decimals}e}".split("e")
+        return f'{self._escape_html(mantissa)} &middot; 10<sup>{int(exponent)}</sup>'
 
     def _unit_parts(self, unit):
         """Dela texten vid numeriska exponenter utan att ta med efterföljande enheter."""
@@ -422,7 +418,7 @@ class CalcBlock:
         decimals = self._get_item_decimals(item, decimals_override=decimals_override)
         sigfigs = None if decimals_override else self._sigfigs_for_item(item)
 
-        if item.get("unit") == "mm^4":
+        if item.get("format") == "scientific" or item.get("unit") == "mm^4":
             formatted = self._format_scientific(value, decimals=decimals)
         elif sigfigs is not None:
             formatted = self._fmt_sigfigs(value, sigfigs=sigfigs)
@@ -458,7 +454,7 @@ class CalcBlock:
         else:
             decimals = self._get_item_decimals(item, decimals_override=decimals_override)
             sigfigs = None if decimals_override else self._sigfigs_for_item(item)
-            if item.get("unit") == "mm^4":
+            if item.get("format") == "scientific" or item.get("unit") == "mm^4":
                 formatted = self._format_scientific_html(value, decimals=decimals)
             elif sigfigs is not None:
                 formatted = self._escape_html(self._fmt_sigfigs(value, sigfigs=sigfigs))
