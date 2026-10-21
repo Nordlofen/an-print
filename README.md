@@ -115,6 +115,15 @@ och `symbol`, exempelvis från kraft i kN till linjelast i kN/m.
 Villkoren stöder samma `equals`, `not_equals`, `in`, `not_in` och `all`
 som `visible_if`.
 
+`options_if` använder samma villkorsformat och kan ange en alternativ
+`options`-lista för ett valfält. Den gäller även när sparade fall laddas.
+Vid modellbyte behålls ett val som fortfarande är tillåtet; annars används
+fältets standardvärde eller listans första alternativ.
+
+`panel_schema["preserve_state_fields"]` kan namnge äldre state-fält som ska
+bevaras vid sparande trots att de inte längre finns i formuläret. De läggs
+inte till i beräkningsindata. Detta används för äldre lastvärden i Bäddmodul.
+
 Alla paneler använder samma formgivning med etiketter över fälten, anpassningsbara
 kolumnbredder och en separat, fullbred yta för beräkningsresultaten. Befintliga
 `Panel(funktion, key=...)`-anrop och sparade JSON-fall fungerar som tidigare.

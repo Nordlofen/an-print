@@ -117,6 +117,7 @@ class Panel:
         self._case_key = "" if key is None else str(key)
         self._last_key = self._initial_state_key(key)
         self._initial_values = self._load_initial_values()
+        self._preserved_values = self._preserved_state(self._initial_values)
         self._suspend_case_observer = False
 
         self._widgets = self._load_widgets()
@@ -587,7 +588,7 @@ class Panel:
                 continue
             value = self._field_widgets[name].value
             if field.get("type") == "choice":
-                value = next((option["label"] for option in field.get("options", []) if option["value"] == value), value)
+                value = next((option["label"] for option in self._field_options(field) if option["value"] == value), value)
             elif isinstance(value, bool):
                 if not value:
                     continue
@@ -675,7 +676,7 @@ class Panel:
     def _setup_field_rules(self):
         controllers = set()
         for field in self.schema.get("fields", []):
-            for key in ("fixed_if", "presentation_if"):
+            for key in ("fixed_if", "presentation_if", "options_if"):
                 if field.get(key):
                     controllers.update(self._visible_if_controller_names(field[key]))
         for name in controllers:
@@ -705,6 +706,8 @@ class Panel:
                 widget = self._field_widgets.get(name)
                 if widget is None:
                     continue
+                if field.get("options_if"):
+                    self._set_choice_options(widget, field, widget.value)
                 fixed = field.get("fixed_if")
                 if fixed:
                     active = self._field_is_visible({"visible_if": fixed})
@@ -765,12 +768,14 @@ class Panel:
             record["widget"].layout.display = None if visible else "none"
         self._refresh_summaries()
 
-    def _field_is_visible(self, field):
+    def _field_is_visible(self, field, values=None):
         visible_if = field.get("visible_if")
         if not visible_if:
             return True
         if "all" in visible_if:
-            return all(self._field_is_visible({"visible_if": condition}) for condition in visible_if["all"])
+            return all(self._field_is_visible({"visible_if": condition}, values) for condition in visible_if["all"])
+        if values is not None:
+            return self._visible_if_matches(values.get(visible_if.get("field")), visible_if)
         controller = self._field_widgets.get(visible_if.get("field"))
         if controller is None:
             return True
@@ -842,6 +847,29 @@ class Panel:
         control.description = self._field_label(field)
         return _styled(control, "anp-check" if field.get("type") == "bool" else "anp-input")
 
+    def _field_options(self, field, values=None):
+        rule = field.get("options_if")
+        if rule and self._field_is_visible({"visible_if": rule}, values):
+            return rule["options"]
+        return field.get("options", [])
+
+    def _valid_choice(self, field, options, value):
+        allowed = [item[1] for item in options]
+        if value in allowed:
+            return value
+        default = field.get("default")
+        return default if default in allowed else (allowed[0] if allowed else None)
+
+    def _set_choice_options(self, widget, field, value, values=None):
+        options = [(option["label"], option["value"]) for option in self._field_options(field, values)]
+        if tuple(widget.options) != tuple(options):
+            widget.options = options
+        widget.value = self._valid_choice(field, options, value)
+
+    def _preserved_state(self, values):
+        # Retain explicitly named legacy fields without displaying or calculating them.
+        return {name: values[name] for name in self.schema.get("preserve_state_fields", []) if name in values}
+
     def _create_field_widget(self, field):
         widgets = self._widgets
         field_type = field.get("type", "float")
@@ -869,7 +897,11 @@ class Panel:
                 layout=self._input_layout,
             )
         if field_type == "choice":
-            options = [(option["label"], option["value"]) for option in field.get("options", [])]
+            initial = {f["name"]: f.get("default") for f in self.schema.get("fields", [])}
+            initial.update(self._initial_values)
+            options = [(option["label"], option["value"]) for option in self._field_options(field, initial)]
+            if field.get("options_if"):
+                default = self._valid_choice(field, options, default)
             return widgets.Dropdown(
                 options=options,
                 value=default,
@@ -948,7 +980,7 @@ class Panel:
 
     def _collect_values(self):
         self._refresh_field_rules()
-        values = {}
+        values = dict(self._preserved_values)
         for name, widget in self._field_widgets.items():
             values[name] = widget.value
         for name, table in self._table_widgets.items():
@@ -959,6 +991,9 @@ class Panel:
         return values
 
     def _apply_values(self, values):
+        self._preserved_values = self._preserved_state(values)
+        effective = {f["name"]: f.get("default") for f in self.schema.get("fields", [])}
+        effective.update(values)
         self._suspend_case_observer = True
         try:
             for field in self.schema.get("fields", []):
@@ -970,7 +1005,10 @@ class Panel:
                     continue
                 widget = self._field_widgets.get(name)
                 if widget is not None:
-                    widget.value = values.get(name, field.get("default"))
+                    if field.get("options_if"):
+                        self._set_choice_options(widget, field, effective[name], effective)
+                    else:
+                        widget.value = effective[name]
             saved_blocks = values.get("__blocks__", {})
             for name, block in self._block_widgets.items():
                 defaults = dict(self.DEFAULT_BLOCKS[name])

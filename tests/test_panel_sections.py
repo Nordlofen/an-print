@@ -82,7 +82,8 @@ class TestPanelSections(unittest.TestCase):
         panel._field_widgets["by"].value = 4.2
         panel._field_widgets["typ"].value = "VS"
         self.assertTrue(panel._field_widgets["by"].disabled)
-        self.assertEqual(panel._field_widgets["F"].description, "Linjelast [kN/m]")
+        self.assertNotIn("F", panel._field_widgets)
+        self.assertEqual([value for label, value in panel._field_widgets["form"].options], ["yta", "linje"])
         panel._save_last_values()
         Panel._LAST_VALUES.clear()
         Panel._LAST_BY_FUNCTION.clear()
