@@ -68,6 +68,18 @@ PANEL_CSS = """
 .anp-panel .anp-section-static { width: 100%; min-width: 0; padding: 14px 0; }
 .anp-panel .anp-ungrouped { padding: 0; }
 .anp-panel .anp-section-heading h4 { margin: 0 0 10px; font: inherit; font-weight: 500; color: var(--anp-fg); }
+/* Figure layout is opt-in; panels without figures keep their original width. */
+.anp-panel.anp-panel-illustrated { max-width: 1152px; }
+.anp-panel .anp-illustrated-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: center; width: 100%; min-width: 0; }
+.anp-panel .anp-with-figure { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.anp-panel .anp-figure-widget { width: 100%; max-width: 560px; justify-self: center; }
+.anp-panel .anp-figure { margin: 0; width: 100%; }
+.anp-panel .anp-figure img { display: block; width: 100%; height: auto; }
+.anp-panel .anp-figure figcaption { margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--anp-muted); text-align: center; white-space: normal; }
+.anp-panel .anp-figure-source { display: block; font-size: 11px; }
+@container (max-width: 800px) {
+    .anp-panel .anp-with-figure { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}
 .anp-panel .anp-subsections { align-items: start; gap: 24px; }
 .anp-panel .anp-subsections > .anp-section-static { padding: 0; }
 .anp-panel .anp-subsections > .anp-section-static + .anp-section-static { padding-left: 24px; border-left: 1px solid var(--anp-line); }

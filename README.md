@@ -145,6 +145,28 @@ funktion.panel_schema["sections"] = [
 ]
 ```
 
+Ett avsnitt kan frivilligt ange `figure` för en stillbild bredvid fälten:
+
+```python
+{
+    "title": "Geometri", "fields": ["bx", "by"], "columns": 2,
+    "figure": {
+        "package": "mitt_paket", "resource": "figures/tvarsnitt.png",
+        "caption": "Tvärsnitt", "alt": "Tvärsnitt med måtten bx och by",
+        "source": "Källhänvisning",
+        # "visible_if": {"field": "visa_detalj", "equals": True},
+    },
+}
+```
+
+Resursen läses från det installerade Pythonpaketet och bäddas in i panelen;
+ingen extern bildserver behövs. PNG, JPEG och SVG stöds. Figuren visas till
+vänster om fälten på bred skärm och ovanför på smal skärm. Bildtext, alternativtext
+och källa behandlas som vanlig text. `visible_if` fungerar som för fält.
+Paneler med figurer får större maximal bredd. Scheman utan `figure` behåller
+sin tidigare layout och bredd. Figurer ingår inte i `px`, sparade fall eller
+beräkningsresultat.
+
 Fält kan ange `help` med en kort hjälptext som visas under inmatningen. Texten radbryts och behandlas som vanlig text, inte HTML.
 
 Ett fält kan ange `span: 2` för större bredd och `display_label` för en kortare

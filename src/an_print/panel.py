@@ -1,4 +1,6 @@
+import base64
 import html
+from importlib.resources import files
 import json
 from pathlib import Path
 
@@ -126,6 +128,7 @@ class Panel:
         self._scalar_field_groups = []
         self._sections = {}
         self._section_records = []
+        self._figure_records = []
         self._summaries = []
         self._fixed_values = {}
         self._refreshing_field_rules = False
@@ -266,6 +269,8 @@ class Panel:
         self._button.on_click(self._on_calculate_clicked)
         footer = _styled(widgets.HBox([self._button, self._case_status]), "anp-footer")
         self._form = _styled(widgets.VBox([header, self._fields_box, blocks, footer]), "anp-panel")
+        if self._figure_records:
+            self._form.add_class("anp-panel-illustrated")
         self._output = _styled(widgets.Output(), "anp-output")
         self._refresh_summaries()
         return _styled(widgets.VBox([
@@ -629,6 +634,11 @@ class Panel:
                 nested = self._grid(children, min(len(children), spec.get("columns", 2)))
                 nested.add_class("anp-subsections")
                 content.children = (*content.children, nested)
+            if spec.get("figure"):
+                figure = self._build_figure(spec["figure"])
+                illustrated = _styled(self._widgets.VBox([figure, content]), "anp-illustrated-section")
+                self._figure_records.append({"spec": spec["figure"], "widget": figure, "layout": illustrated})
+                content = illustrated
             title = spec.get("title")
             if title and spec.get("collapsible", False):
                 summary = spec.get("summary")
@@ -653,6 +663,22 @@ class Panel:
         self._restore_field_rules(self._initial_values)
         self._refresh_field_groups()
         return self._widgets.VBox(rows)
+
+    def _build_figure(self, spec):
+        # Package resources also work after installation, without the source PDF.
+        resource = spec["resource"]
+        mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml"}.get(Path(resource).suffix.lower())
+        if mime is None:
+            raise ValueError(f"Bildformatet stöds inte: {resource!r}.")
+        data = files(spec["package"]).joinpath(resource).read_bytes()
+        encoded = base64.b64encode(data).decode("ascii")
+        caption = html.escape(spec.get("caption", ""))
+        alt = html.escape(spec.get("alt", spec.get("caption", "")), quote=True)
+        source = html.escape(spec.get("source", ""))
+        credit = f'<span class="anp-figure-source">{source}</span>' if source else ""
+        markup = (f'<figure class="anp-figure"><img src="data:{mime};base64,{encoded}" alt="{alt}">'
+                  f'<figcaption>{caption}{credit}</figcaption></figure>')
+        return _styled(self._widgets.HTML(markup), "anp-figure-widget")
 
     def _build_field_section(self, fields, columns=2):
         rows, scalar_fields = [], []
@@ -752,7 +778,8 @@ class Panel:
         return row
 
     def _setup_visibility_rules(self):
-        for field in self.schema.get("fields", []):
+        rules = [*self.schema.get("fields", []), *(record["spec"] for record in self._figure_records)]
+        for field in rules:
             visible_if = field.get("visible_if")
             if not visible_if:
                 continue
@@ -764,6 +791,13 @@ class Panel:
                     controller.observe(lambda _change: self._refresh_field_groups(), names="value")
 
     def _refresh_field_groups(self):
+        for record in self._figure_records:
+            visible = self._field_is_visible(record["spec"])
+            record["widget"].layout.display = None if visible else "none"
+            if visible:
+                record["layout"].add_class("anp-with-figure")
+            else:
+                record["layout"].remove_class("anp-with-figure")
         for group in self._scalar_field_groups:
             group["box"].children = [self._field_rows[field["name"]] for field in group["fields"] if self._field_is_visible(field)]
         for record in self._section_records:
