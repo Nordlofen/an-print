@@ -62,6 +62,8 @@ PANEL_CSS = """
 .anp-panel .anp-check label { width: auto; margin: 0; font: inherit; font-size: 13px; white-space: normal; display: flex; align-items: center; gap: 7px; color: var(--anp-fg); }
 .anp-panel .anp-check input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; margin: 0; accent-color: var(--anp-action); }
 .anp-panel .anp-check .widget-label { width: auto; padding: 0; text-align: left; white-space: normal; }
+.anp-panel .anp-toggle { max-width: 100%; height: auto; min-height: 32px; margin: 0; padding: 5px 10px; border: 1px solid var(--anp-line); border-radius: 4px; background: var(--anp-soft); color: var(--anp-fg); font: inherit; font-size: 13px; white-space: normal; }
+.anp-panel .anp-toggle.mod-active { background: var(--anp-action); color: var(--anp-on-action); border-color: var(--anp-action); }
 .anp-panel .anp-section { position: relative; width: 100%; min-width: 0; padding: 13px 0; border-top: 1px solid var(--anp-line); }
 .anp-panel .anp-section-static { width: 100%; min-width: 0; padding: 14px 0; }
 .anp-panel .anp-ungrouped { padding: 0; }
