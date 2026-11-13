@@ -41,6 +41,7 @@ PANEL_CSS = """
 .anp-panel .anp-field-label { font-size: 12px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
 .anp-panel .anp-field-meta { min-height: 18px; font-size: 12px; line-height: 1.5; color: var(--anp-muted); }
 .anp-panel .anp-field-meta:empty { display: none; }
+.anp-panel .anp-field-help { font-size: 12px; line-height: 1.5; color: var(--anp-muted); white-space: normal; overflow-wrap: anywhere; }
 .anp-panel .anp-field-meta i { font-style: italic; }
 .anp-panel .anp-input { width: 100%; min-width: 0; height: auto; margin: 0; padding: 0; }
 /* Keep native labels available to assistive technology, beside the visible HTML label. */

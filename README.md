@@ -145,6 +145,8 @@ funktion.panel_schema["sections"] = [
 ]
 ```
 
+Fält kan ange `help` med en kort hjälptext som visas under inmatningen. Texten radbryts och behandlas som vanlig text, inte HTML.
+
 Ett fält kan ange `span: 2` för större bredd och `display_label` för en kortare
 synlig etikett inom en namngiven grupp. Den fullständiga `label` används fortsatt
 för tillgänglighetsnamnet. Tabeller kan ange `add_label` för knappen som lägger

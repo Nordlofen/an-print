@@ -743,6 +743,9 @@ class Panel:
             label = widgets.HTML(self._field_label_html(field))
             symbol = widgets.HTML(self._field_symbol(field))
             row = widgets.VBox([label, symbol, control])
+        if field.get("help"):
+            help_text = html.escape(str(field["help"]))
+            row.children = (*row.children, widgets.HTML(f'<div class="anp-field-help">{help_text}</div>'))
         _styled(row, "anp-field")
         if field.get("span") in (2, 3):
             row.add_class(f"anp-span-{field['span']}")
