@@ -170,6 +170,7 @@ sin tidigare layout och bredd. Figurer ingår inte i `px`, sparade fall eller
 beräkningsresultat.
 
 Fält kan ange `help` med en kort hjälptext som visas under inmatningen. Texten radbryts och behandlas som vanlig text, inte HTML.
+För formatering, exempelvis index, kan schemat ange `help_html` som används framför `help`. Behåll gärna `help` som textalternativ för äldre panelversioner.
 
 Ett fält kan ange `span: 2` för större bredd och `display_label` för en kortare
 synlig etikett inom en namngiven grupp. Den fullständiga `label` används fortsatt
