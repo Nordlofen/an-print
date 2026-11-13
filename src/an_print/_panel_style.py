@@ -75,6 +75,9 @@ PANEL_CSS = """
 .anp-panel .anp-figure-widget { width: 100%; max-width: 560px; justify-self: center; }
 .anp-panel .anp-figure { margin: 0; width: 100%; }
 .anp-panel .anp-figure img { display: block; width: 100%; height: auto; }
+.anp-panel .anp-figure svg { display: block; width: 100%; height: auto; }
+.anp-panel .anp-figure-full { grid-template-columns: minmax(0, 1fr); }
+.anp-panel .anp-figure-full > .anp-figure-widget { max-width: 100%; }
 .anp-panel .anp-figure figcaption { margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--anp-muted); text-align: center; white-space: normal; }
 .anp-panel .anp-figure-source { display: block; font-size: 11px; }
 @container (max-width: 800px) {

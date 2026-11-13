@@ -172,6 +172,28 @@ beräkningsresultat.
 Fält kan ange `help` med en kort hjälptext som visas under inmatningen. Texten radbryts och behandlas som vanlig text, inte HTML.
 För formatering, exempelvis index, kan schemat ange `help_html` som används framför `help`. Behåll gärna `help` som textalternativ för äldre panelversioner.
 
+En figur kan även använda en lokal renderare i stället för en bildresurs:
+
+```python
+"figure": {
+    "renderer": "mitt_paket.skiss:render",
+    "fields": ["bredd", "hojd"],
+    "caption": "Måttskiss som följer indata",
+}
+```
+
+Renderaren anropas med en dictionary av de angivna skalära fältvärdena och
+returnerar HTML/SVG. Den laddas endast i panelen och ska hantera ofullständiga
+skissmått utan att anropa beräkningsfunktionen. Enhets- och låsningsregler
+tillämpas före slutlig uppdatering. Skissen uppdateras även vid fallbyte och
+återläsning. Renderaren är betrodd lokal paketkod i schemat; renderingskod
+eller figurinnehåll hämtas aldrig från sparade fall. Vanliga värdefel visas
+vid skissen utan att blockera beräkning. Figurer sparas inte i state.
+
+Avsnitt utan fält kan innehålla enbart en figur och kan fällas ihop som övriga
+avsnitt. `figure["full_width"]=True` placerar figuren ovanför innehållet över
+hela bredden; detta är också standard när avsnittet saknar fält/underavsnitt.
+
 Ett fält kan ange `span: 2` för större bredd och `display_label` för en kortare
 synlig etikett inom en namngiven grupp. Den fullständiga `label` används fortsatt
 för tillgänglighetsnamnet. Tabeller kan ange `add_label` för knappen som lägger

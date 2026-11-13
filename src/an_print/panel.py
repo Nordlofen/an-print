@@ -1,5 +1,6 @@
 import base64
 import html
+from importlib import import_module
 from importlib.resources import files
 import json
 from pathlib import Path
@@ -618,6 +619,7 @@ class Panel:
         used = set()
 
         def build(spec):
+            first_figure = len(self._figure_records)
             names = spec.get("fields", [])
             for name in names:
                 if name not in fields or name in used:
@@ -637,6 +639,8 @@ class Panel:
             if spec.get("figure"):
                 figure = self._build_figure(spec["figure"])
                 illustrated = _styled(self._widgets.VBox([figure, content]), "anp-illustrated-section")
+                if spec["figure"].get("full_width") or not names and not spec.get("sections"):
+                    illustrated.add_class("anp-figure-full")
                 self._figure_records.append({"spec": spec["figure"], "widget": figure, "layout": illustrated})
                 content = illustrated
             title = spec.get("title")
@@ -650,7 +654,8 @@ class Panel:
                 wrapper = _styled(self._widgets.VBox([heading, content]), "anp-section-static")
             else:
                 wrapper = _styled(content, "anp-section-static", "anp-ungrouped")
-            self._section_records.append({"widget": wrapper, "fields": [fields[name] for name in descendants]})
+            self._section_records.append({"widget": wrapper, "fields": [fields[name] for name in descendants],
+                                          "figures": self._figure_records[first_figure:]})
             return wrapper, descendants
 
         rows = [build(spec)[0] for spec in sections]
@@ -662,9 +667,14 @@ class Panel:
         self._setup_field_rules()
         self._restore_field_rules(self._initial_values)
         self._refresh_field_groups()
+        self._setup_dynamic_figures()
         return self._widgets.VBox(rows)
 
     def _build_figure(self, spec):
+        if spec.get("renderer"):
+            # Loaded only by the presentation layer, never by the calculation.
+            # The schema is trusted local Python metadata, not saved case data.
+            return _styled(self._widgets.HTML(), "anp-figure-widget")
         # Package resources also work after installation, without the source PDF.
         resource = spec["resource"]
         mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml"}.get(Path(resource).suffix.lower())
@@ -679,6 +689,40 @@ class Panel:
         markup = (f'<figure class="anp-figure"><img src="data:{mime};base64,{encoded}" alt="{alt}">'
                   f'<figcaption>{caption}{credit}</figcaption></figure>')
         return _styled(self._widgets.HTML(markup), "anp-figure-widget")
+
+    def _setup_dynamic_figures(self):
+        for record in self._figure_records:
+            spec = record["spec"]
+            if not spec.get("renderer"):
+                continue
+            module, name = spec["renderer"].split(":", 1)
+            record["render"] = getattr(import_module(module), name)
+            for field in spec.get("fields", []):
+                if field not in self._field_widgets:
+                    raise ValueError(f"Okänt fält för dynamisk figur: {field!r}.")
+                self._field_widgets[field].observe(
+                    lambda _change, record=record: self._refresh_dynamic_figure(record), names="value")
+            self._refresh_dynamic_figure(record)
+
+    def _refresh_dynamic_figure(self, record):
+        if self._suspend_case_observer or self._refreshing_field_rules:
+            return
+        spec = record["spec"]
+        values = {name: self._field_widgets[name].value for name in spec.get("fields", [])}
+        try:
+            drawing = record["render"](values)
+        except (ValueError, TypeError, ArithmeticError) as exc:
+            drawing = f'<p role="status">Skissen kan inte visas: {html.escape(str(exc))}</p>'
+        caption = html.escape(spec.get("caption", ""))
+        source = html.escape(spec.get("source", ""))
+        credit = f'<span class="anp-figure-source">{source}</span>' if source else ""
+        record["widget"].value = (f'<figure class="anp-figure anp-dynamic-figure">{drawing}'
+                                  f'<figcaption>{caption}{credit}</figcaption></figure>')
+
+    def _refresh_dynamic_figures(self):
+        for record in self._figure_records:
+            if "render" in record:
+                self._refresh_dynamic_figure(record)
 
     def _build_field_section(self, fields, columns=2):
         rows, scalar_fields = [], []
@@ -755,6 +799,7 @@ class Panel:
                     widget.description = self._field_label(shown)
         finally:
             self._refreshing_field_rules = False
+        self._refresh_dynamic_figures()
 
     def _add_scalar_field_group(self, rows, fields, columns=2):
         group_box = self._grid([], columns)
@@ -801,7 +846,8 @@ class Panel:
         for group in self._scalar_field_groups:
             group["box"].children = [self._field_rows[field["name"]] for field in group["fields"] if self._field_is_visible(field)]
         for record in self._section_records:
-            visible = any(self._field_is_visible(field) for field in record["fields"])
+            visible = (any(self._field_is_visible(field) for field in record["fields"])
+                       or any(self._field_is_visible(figure["spec"]) for figure in record.get("figures", [])))
             record["widget"].layout.display = None if visible else "none"
         self._refresh_summaries()
 
