@@ -29,6 +29,12 @@ cb.SR(visa=True, etikett=True, rader=6)
 `CalcLayout` ansvarar for att arrangera redan byggda block fran ett eller flera
 `CalcBlock`-objekt.
 
+`details["ekvationer"]` kan ha en frivillig `notes`-lista med poster som
+`{"rubrik": "Tillämpningsvillkor", "text": "..."}`. Noterna visas under hela
+ekvationsblocket i både LaTeX och HTML, utan likhetstecken eller påverkan på
+vänsterkolumnens bredd. De visas även med `etikett=False`. Rubrik och text
+behandlas som vanlig text och skyddas för korrekt LaTeX- och HTML-rendering.
+
 En numerisk datapost kan ange `"format": "scientific"` och `"decimals": 2`
 för tiopotensform med två decimaler i mantissan, exempelvis
 `8.20 · 10^4`. Det gäller både LaTeX och HTML; `value` behåller full precision.

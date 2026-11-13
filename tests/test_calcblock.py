@@ -51,6 +51,46 @@ class TestCalcBlock(unittest.TestCase):
             r"$\backslash$\{A\_B$\backslash$\} \& 50\% \$ \# $\hat{}$ $\sim$ $\cdot$",
         )
 
+    def test_ekvationsnoter_ligger_utanfor_vansterled_och_kolumner(self):
+        section = {"title": "Ekvationer", "items": [
+            {"latex": "a=2b", "etikett": "Förklaring"}, {"latex": "c=3d"}],
+            "notes": [{"rubrik": "Tillämpningsvillkor", "text": "a ≥ 0; b ≤ 1. Krav: 100 %."}]}
+        cb = CalcBlock({"ekvationer": section})
+        for labels in (False, True):
+            cb.EKV(etikett=labels, rader=1)
+            equations, notes = cb.latex_ekv.split(r"\end{array}", 1)
+            self.assertNotIn("Tillämpningsvillkor", equations)
+            self.assertNotIn("≥", equations)
+            self.assertIn("Tillämpningsvillkor", notes)
+            self.assertNotIn(" & = & ", notes)
+            self.assertEqual(cb.html_ekv.count('class="anp-eq-block__note"'), 1)
+            self.assertEqual(cb.html_ekv.count('class="anp-eq-block__eq"'), 2)
+            self.assertIn("a ≥ 0; b ≤ 1. Krav: 100 %.", cb.html_ekv)
+            self.assertEqual("Förklaring" in cb.latex_ekv, labels)
+
+    def test_ekvationsnoter_escapas_och_ar_frivilliga(self):
+        section = {"title": "Ekvationer", "items": [{"latex": "a=b"}]}
+        cb = CalcBlock({"ekvationer": section})
+        cb.EKV()
+        original = (cb.latex_ekv, cb.html_ekv)
+        section["notes"] = []
+        cb.EKV()
+        self.assertEqual((cb.latex_ekv, cb.html_ekv), original)
+        section["notes"] = [{"rubrik": "A & B", "text": "x_y < 2 & 100% <script>"}]
+        cb.EKV()
+        self.assertIn(r"A \& B", cb.latex_ekv)
+        self.assertIn(r"x\_y < 2 \& 100\% <script>", cb.latex_ekv)
+        self.assertIn("A &amp; B", cb.html_ekv)
+        self.assertIn("&lt;script&gt;", cb.html_ekv)
+        self.assertNotIn("<script>", cb.html_ekv)
+
+    def test_jamviktssummor_och_spridningsuttryck_i_html(self):
+        cb = CalcBlock({})
+        self.assertEqual(cb._latex_to_html(r"\sum F_x"), "∑ F<sub>x</sub>")
+        self.assertEqual(cb._latex_to_html(r"\Delta a"), "Δ a")
+        self.assertEqual(cb._latex_to_html(r"\tan(26{,}6^\circ)"), "tan(26,6<sup>°</sup>)")
+        self.assertEqual(cb._latex_to_html(r"\max(F_1,F_2)"), "max(F<sub>1</sub>,F<sub>2</sub>)")
+
     def test_enhet_med_potens_och_efterfoljande_division(self):
         cb = CalcBlock({})
         self.assertEqual(cb._format_unit("kN/m^2/m"), r"\tiny{[\mathrm{kN/m}^{2}\mathrm{/m}]} ")

@@ -487,6 +487,7 @@ class CalcBlock:
             "beta": "β",
             "gamma": "γ",
             "Gamma": "Γ",
+            "Delta": "Δ",
             "lambda": "λ",
             "Lambda": "Λ",
             "mu": "μ",
@@ -518,6 +519,9 @@ class CalcBlock:
             idx = skip_ws(text, idx)
             if idx >= len(text):
                 return "", idx
+            if text[idx] == "\\":
+                _, end = read_command(text, idx)
+                return text[idx:end], end
             if text[idx] == "{":
                 depth = 1
                 idx += 1
@@ -542,6 +546,10 @@ class CalcBlock:
 
                     if cmd in greek:
                         parts.append(greek[cmd])
+                        continue
+
+                    if cmd in {"sum", "circ", "tan", "max"}:
+                        parts.append({"sum": "∑", "circ": "°", "tan": "tan", "max": "max"}[cmd])
                         continue
 
                     if cmd in {"left", "right"}:
@@ -737,7 +745,8 @@ class CalcBlock:
 
         Parametrar:
             section : dict
-                Sektion med ``title`` och ``items``.
+                Sektion med ``title``, ``items`` och frivilliga ``notes``.
+                Noter har ``rubrik`` och ``text`` och visas utanför ekvationstabellen.
 
             etikett : bool, optional
                 Om True läggs förklarande etiketter till under ekvationerna.
@@ -780,6 +789,14 @@ class CalcBlock:
             lines.append(" & ".join(radceller) + r"\\")
 
         lines.append(r"\end{array}")
+        for note in section.get("notes", []):
+            lines.append(r"\\[0.6em]")
+            note_lines = []
+            if note.get("rubrik"):
+                note_lines.append(r"\textbf{" + self._escape_text(note["rubrik"]) + "}")
+            for text_line in self._wrap_text(note.get("text", "")):
+                note_lines.append(r"\text{" + self._escape_text(text_line) + "}")
+            lines.append(r"\\".join(note_lines))
         lines.append(r"\end{array}")
         lines.append(r"$")
         return "\n".join(lines)
@@ -944,6 +961,12 @@ class CalcBlock:
             parts.append("</div>")
 
         parts.append("</div>")
+        for note in section.get("notes", []):
+            parts.append('<div class="anp-eq-block__note">')
+            if note.get("rubrik"):
+                parts.append(f'<h4>{self._escape_html(note["rubrik"])}</h4>')
+            text = self._escape_html(note.get("text", "")).replace("\n", "<br>")
+            parts.append(f'<p>{text}</p></div>')
         parts.append("</section>")
         return "\n".join(parts)
 
