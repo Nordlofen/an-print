@@ -645,7 +645,7 @@ class CalcBlock:
             list[list[dict]]
                 En lista av kolumner dar varje kolumn innehaller sina poster.
         """
-        if rader is None or rader <= 0:
+        if not items or rader is None or rader <= 0:
             return [items]
 
         return [items[i:i + rader] for i in range(0, len(items), rader)]
@@ -708,6 +708,8 @@ class CalcBlock:
             str
                 LaTeX-kod för sektionen.
         """
+        if not section["items"]:
+            return ""
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
@@ -729,7 +731,7 @@ class CalcBlock:
                         if etikett and item.get("etikett")
                         else ""
                     )
-                    radceller.extend([lhs, "=", rhs, kommentar])
+                    radceller.extend([lhs, "" if item.get("show_equals") is False else "=", rhs, kommentar])
                 else:
                     radceller.extend(["", "", "", ""])
             lines.append(" & ".join(radceller) + r"\\")
@@ -759,6 +761,8 @@ class CalcBlock:
             str
                 LaTeX-kod för ekvationssektionen.
         """
+        if not section["items"] and not section.get("notes"):
+            return ""
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
 
         lines = [r"$"]
@@ -814,6 +818,8 @@ class CalcBlock:
             str
                 LaTeX-kod för metodbeskrivningen.
         """
+        if not section["items"]:
+            return ""
         lines = [r"$", r"\begin{aligned}"]
         lines.append(r"& \textbf{" + self._escape_text(section["title"]) + r"} \\[0.4em]")
 
@@ -846,6 +852,8 @@ class CalcBlock:
             str
                 HTML-kod för metodbeskrivningen.
         """
+        if not section["items"]:
+            return ""
         parts = [
             '<section class="anp-method-block">',
             f'<h3 class="anp-method-block__title">{self._escape_html(section["title"])}</h3>',
@@ -884,6 +892,8 @@ class CalcBlock:
             str
                 HTML-kod för sektionen.
         """
+        if not section["items"]:
+            return ""
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
         parts = [
             f'<section class="anp-data-block anp-data-block--cols-{len(kolumner)}">',
@@ -901,7 +911,8 @@ class CalcBlock:
                     lhs_class += " anp-data-block__lhs--text"
                 parts.append('<div class="anp-data-block__row">')
                 parts.append(f'<div class="{lhs_class}">{lhs}</div>')
-                parts.append('<div class="anp-data-block__eq">=</div>')
+                equals = "" if item.get("show_equals") is False else "="
+                parts.append(f'<div class="anp-data-block__eq">{equals}</div>')
                 parts.append(f'<div class="anp-data-block__rhs">{rhs}</div>')
                 if etikett and item.get("etikett"):
                     etikett_text = self._escape_html(item["etikett"])
@@ -931,6 +942,8 @@ class CalcBlock:
             str
                 HTML-kod för sektionen.
         """
+        if not section["items"] and not section.get("notes"):
+            return ""
         kolumner = self._dela_items_i_kolumner(section["items"], rader=rader)
         parts = [
             f'<section class="anp-eq-block anp-eq-block--cols-{len(kolumner)}">',

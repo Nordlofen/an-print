@@ -130,6 +130,7 @@ class Panel:
         self._sections = {}
         self._section_records = []
         self._figure_records = []
+        self._help_checks = []
         self._summaries = []
         self._fixed_values = {}
         self._refreshing_field_rules = False
@@ -638,6 +639,11 @@ class Panel:
                 content.children = (*content.children, nested)
             if spec.get("figure"):
                 figure = self._build_figure(spec["figure"])
+                max_width = spec["figure"].get("max_width")
+                if max_width is not None:
+                    if isinstance(max_width, bool) or not isinstance(max_width, int) or max_width <= 0:
+                        raise ValueError("Figurens max_width måste vara ett positivt heltal i pixlar.")
+                    figure.layout.max_width = f"{max_width}px"
                 illustrated = _styled(self._widgets.VBox([figure, content]), "anp-illustrated-section")
                 if spec["figure"].get("full_width") or not names and not spec.get("sections"):
                     illustrated.add_class("anp-figure-full")
@@ -668,6 +674,7 @@ class Panel:
         self._restore_field_rules(self._initial_values)
         self._refresh_field_groups()
         self._setup_dynamic_figures()
+        self._setup_help_checks()
         return self._widgets.VBox(rows)
 
     def _build_figure(self, spec):
@@ -682,7 +689,7 @@ class Panel:
             raise ValueError(f"Bildformatet stöds inte: {resource!r}.")
         data = files(spec["package"]).joinpath(resource).read_bytes()
         encoded = base64.b64encode(data).decode("ascii")
-        caption = html.escape(spec.get("caption", ""))
+        caption = str(spec["caption_html"]) if spec.get("caption_html") else html.escape(spec.get("caption", ""))
         alt = html.escape(spec.get("alt", spec.get("caption", "")), quote=True)
         source = html.escape(spec.get("source", ""))
         credit = f'<span class="anp-figure-source">{source}</span>' if source else ""
@@ -713,7 +720,7 @@ class Panel:
             drawing = record["render"](values)
         except (ValueError, TypeError, ArithmeticError) as exc:
             drawing = f'<p role="status">Skissen kan inte visas: {html.escape(str(exc))}</p>'
-        caption = html.escape(spec.get("caption", ""))
+        caption = str(spec["caption_html"]) if spec.get("caption_html") else html.escape(spec.get("caption", ""))
         source = html.escape(spec.get("source", ""))
         credit = f'<span class="anp-figure-source">{source}</span>' if source else ""
         record["widget"].value = (f'<figure class="anp-figure anp-dynamic-figure">{drawing}'
@@ -816,11 +823,31 @@ class Panel:
             row = widgets.VBox([label, symbol, control])
         if field.get("help_html") or field.get("help"):
             help_text = str(field["help_html"]) if field.get("help_html") else html.escape(str(field["help"]))
-            row.children = (*row.children, widgets.HTML(f'<div class="anp-field-help">{help_text}</div>'))
+            help_widget = widgets.HTML(f'<div class="anp-field-help">{help_text}</div>')
+            row.children = (*row.children, help_widget)
+            if field.get("help_check"):
+                self._help_checks.append({"spec": field["help_check"], "widget": help_widget})
         _styled(row, "anp-field")
         if field.get("span") in (2, 3):
             row.add_class(f"anp-span-{field['span']}")
         return row
+
+    def _setup_help_checks(self):
+        """Färga hjälptext via en ren kontroll i beräkningspaketet."""
+        for record in self._help_checks:
+            module, name = record["spec"]["validator"].split(":", 1)
+            record["validate"] = getattr(import_module(module), name)
+            for field in record["spec"]["fields"]:
+                self._field_widgets[field].observe(
+                    lambda _change, record=record: self._refresh_help_check(record), names="value")
+            self._refresh_help_check(record)
+
+    def _refresh_help_check(self, record):
+        values = {name: self._field_widgets[name].value for name in record["spec"]["fields"]}
+        if record["validate"](values):
+            record["widget"].remove_class("anp-help-error")
+        else:
+            record["widget"].add_class("anp-help-error")
 
     def _setup_visibility_rules(self):
         rules = [*self.schema.get("fields", []), *(record["spec"] for record in self._figure_records)]

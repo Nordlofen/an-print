@@ -91,6 +91,27 @@ class TestCalcBlock(unittest.TestCase):
         self.assertEqual(cb._latex_to_html(r"\tan(26{,}6^\circ)"), "tan(26,6<sup>°</sup>)")
         self.assertEqual(cb._latex_to_html(r"\max(F_1,F_2)"), "max(F<sub>1</sub>,F<sub>2</sub>)")
 
+    def test_kontrollrad_utan_extra_likhetstecken(self):
+        cb = CalcBlock({"slutresultat": {"title": "Resultat", "items": [
+            {"latex": r"l\geq1{,}2h", "value": "Ej uppfyllt", "show_equals": False},
+            {"latex": "a", "value": 2}]}})
+        cb.SR(rader=10)
+        self.assertIn(r"l\geq1{,}2h &  & \text{Ej uppfyllt}", cb.latex_sr)
+        self.assertEqual(cb.latex_sr.count(" & = & "), 1)
+        self.assertEqual(cb.html_sr.count('class="anp-data-block__eq">='), 1)
+
+    def test_tomma_avsnitt_doljs_men_fristaende_not_bevaras(self):
+        cb = CalcBlock({key: {"title": key, "items": []} for key in
+                        ("metodbeskrivning", "indata", "delresultat", "slutresultat", "ekvationer")})
+        for block in ("MB", "ID", "DR", "SR", "EKV"):
+            getattr(cb, block)(**({} if block == "MB" else {"rader": 10}))
+            self.assertEqual(getattr(cb, "latex_"+block.lower()), "")
+            self.assertEqual(getattr(cb, "html_"+block.lower()), "")
+        cb.details["ekvationer"]["notes"] = [{"text": "Konsekventa enheter."}]
+        cb.EKV(rader=10)
+        self.assertIn("Konsekventa enheter.", cb.latex_ekv)
+        self.assertIn("Konsekventa enheter.", cb.html_ekv)
+
     def test_enhet_med_potens_och_efterfoljande_division(self):
         cb = CalcBlock({})
         self.assertEqual(cb._format_unit("kN/m^2/m"), r"\tiny{[\mathrm{kN/m}^{2}\mathrm{/m}]} ")

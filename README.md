@@ -35,6 +35,10 @@ ekvationsblocket i både LaTeX och HTML, utan likhetstecken eller påverkan på
 vänsterkolumnens bredd. De visas även med `etikett=False`. Rubrik och text
 behandlas som vanlig text och skyddas för korrekt LaTeX- och HTML-rendering.
 
+En datapost kan ange `show_equals=False` för en kontrollrad, exempelvis
+`l ≥ 1,2h` följt av `Uppfyllt`, utan ett extra likhetstecken. Tomma
+avsnitt ger ingen rubrik eller tom tabell i LaTeX/HTML.
+
 En numerisk datapost kan ange `"format": "scientific"` och `"decimals": 2`
 för tiopotensform med två decimaler i mantissan, exempelvis
 `8.20 · 10^4`. Det gäller både LaTeX och HTML; `value` behåller full precision.
@@ -170,13 +174,22 @@ Ett avsnitt kan frivilligt ange `figure` för en stillbild bredvid fälten:
 Resursen läses från det installerade Pythonpaketet och bäddas in i panelen;
 ingen extern bildserver behövs. PNG, JPEG och SVG stöds. Figuren visas till
 vänster om fälten på bred skärm och ovanför på smal skärm. Bildtext, alternativtext
-och källa behandlas som vanlig text. `visible_if` fungerar som för fält.
+och källa behandlas som vanlig text. `caption_html` kan ange formaterad
+bildtext med exempelvis index, som betrodd HTML från paketschemat.
+`max_width` kan begränsa figurens bredd till ett positivt heltal i pixlar,
+även när `full_width=True`. `visible_if` fungerar som för fält.
 Paneler med figurer får större maximal bredd. Scheman utan `figure` behåller
 sin tidigare layout och bredd. Figurer ingår inte i `px`, sparade fall eller
 beräkningsresultat.
 
 Fält kan ange `help` med en kort hjälptext som visas under inmatningen. Texten radbryts och behandlas som vanlig text, inte HTML.
 För formatering, exempelvis index, kan schemat ange `help_html` som används framför `help`. Behåll gärna `help` som textalternativ för äldre panelversioner.
+
+`help_check={"validator": "paket.modul:kontroll", "fields": ["l", "h"]}`
+kan färga hjälptexten röd om en ren kontrollfunktion returnerar False.
+Kontrollen får en dictionary med de angivna fältvärdena och körs direkt
+vid ändringar och återläsning. Validatorn är betrodd lokal paketkod;
+beräkningsfunktionen ansvarar fortfarande för sin egen validering.
 
 En figur kan även använda en lokal renderare i stället för en bildresurs:
 

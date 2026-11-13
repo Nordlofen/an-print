@@ -8,6 +8,7 @@ PANEL_CSS = """
     --anp-bg: #fff;
     --anp-fg: #202327;
     --anp-muted: #5a626b;
+    --anp-error: #b42318;
     --anp-line: #d7dce1;
     --anp-field: #fff;
     --anp-soft: #f4f6f8;
@@ -42,6 +43,8 @@ PANEL_CSS = """
 .anp-panel .anp-field-meta { min-height: 18px; font-size: 12px; line-height: 1.5; color: var(--anp-muted); }
 .anp-panel .anp-field-meta:empty { display: none; }
 .anp-panel .anp-field-help { font-size: 12px; line-height: 1.5; color: var(--anp-muted); white-space: normal; overflow-wrap: anywhere; }
+.anp-panel .anp-help-error .anp-field-help { color: var(--anp-error); }
+[data-jp-theme-light="false"] .anp-panel { --anp-error: #ff8a80; }
 .anp-panel .anp-field-meta i { font-style: italic; }
 .anp-panel .anp-input { width: 100%; min-width: 0; height: auto; margin: 0; padding: 0; }
 /* Keep native labels available to assistive technology, beside the visible HTML label. */
