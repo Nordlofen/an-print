@@ -849,10 +849,11 @@ class Panel:
         control = self._create_field_widget(field)
         control.description = self._field_label(field)
         if field.get("type") == "bool" and field.get("widget") == "toggle":
-            if field.get("label_html"):
-                control.description = field["label_html"]
-                control.description_allow_html = True
+            # ToggleButton renders plain text, even with description_allow_html.
             return _styled(control, "anp-toggle")
+        if field.get("type") == "bool" and field.get("label_html"):
+            control.description = field["label_html"]
+            control.description_allow_html = True
         return _styled(control, "anp-check" if field.get("type") == "bool" else "anp-input")
 
     def _field_options(self, field, values=None):
