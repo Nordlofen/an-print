@@ -133,7 +133,9 @@ För anpassad gruppering kan schemat ange `sections`. Varje avsnitt kan ha
 `title`, `fields` (fältnamn i visningsordning), `columns` (1–3),
 `collapsible`, `collapsed` och en kort `summary` eller `summary_fields`.
 Underavsnitt anges med en inre `sections`-lista, exempelvis för Del 1 och Del 2
-sida vid sida. `px` bestämmer alltid ordningen för beräkningsindata, oberoende
+sida vid sida. Med `columns: 1` på det yttre avsnittet staplas underavsnitten
+på full bredd, till exempel under en gemensam ihopfällbar Indata-rubrik.
+`px` bestämmer alltid ordningen för beräkningsindata, oberoende
 av fältens visuella placering. Fält som saknas i avsnitten visas sist;
 okända eller upprepade fältnamn avvisas.
 

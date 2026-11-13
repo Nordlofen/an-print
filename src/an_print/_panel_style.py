@@ -82,8 +82,8 @@ PANEL_CSS = """
 }
 .anp-panel .anp-subsections { align-items: start; gap: 24px; }
 .anp-panel .anp-subsections > .anp-section-static { padding: 0; }
-.anp-panel .anp-subsections > .anp-section-static + .anp-section-static { padding-left: 24px; border-left: 1px solid var(--anp-line); }
-.anp-panel .anp-subsections .anp-section-heading h4 { font-size: 12px; margin-bottom: 8px; }
+.anp-panel .anp-subsections:not(.anp-cols-1) > .anp-section-static + .anp-section-static { padding-left: 24px; border-left: 1px solid var(--anp-line); }
+.anp-panel .anp-subsections:not(.anp-cols-1) .anp-section-heading h4 { font-size: 12px; margin-bottom: 8px; }
 .anp-panel .widget-accordion { width: 100%; margin: 0; padding: 0; overflow: visible; }
 .anp-panel .p-Collapse, .anp-panel .jupyter-widget-Collapse { margin: 0; border: 0; box-shadow: none; background: transparent; }
 .anp-panel .p-Collapse-header, .anp-panel .jupyter-widget-Collapse-header { margin: 0; padding: 0; border: 0; background: transparent; color: var(--anp-fg); font: inherit; font-weight: 500; line-height: 24px; min-height: 24px; white-space: normal; }
@@ -135,7 +135,7 @@ PANEL_CSS = """
 @container (max-width: 400px) {
     .anp-panel .anp-cols-2, .anp-panel .anp-cols-3 { grid-template-columns: minmax(0, 1fr); }
     .anp-panel .anp-span-2, .anp-panel .anp-span-3 { grid-column: auto; }
-    .anp-panel .anp-subsections > .anp-section-static + .anp-section-static { padding-left: 0; padding-top: 14px; border-left: 0; border-top: 1px solid var(--anp-line); }
+    .anp-panel .anp-subsections:not(.anp-cols-1) > .anp-section-static + .anp-section-static { padding-left: 0; padding-top: 14px; border-left: 0; border-top: 1px solid var(--anp-line); }
     .anp-panel .anp-report-row { grid-template-columns: minmax(0,1fr) 32px 42px 48px; gap: 4px; }
 }
 @media (pointer: coarse) {
